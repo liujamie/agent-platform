@@ -7,12 +7,39 @@ from app.config.settings import get_settings
 
 settings = get_settings()
 
+# --- Initialize core components at module level ---
+
+# 1. Tool Registry (import tools to trigger @tool decorator)
+from app.core.tool.decorator import get_registry
+import app.tools  # noqa: F401
+tool_registry = get_registry()
+
+# 2. Model Router (model clients registered in lifespan)
+from app.model.router import ModelRouter
+model_router = ModelRouter()
+
+# 3. Include API routers
+from app.api.agent_routes import router as agent_router
+from app.api.tool_routes import router as tool_router
+from app.api.model_routes import router as model_router_api
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: init core components
+    global model_router
+
+    # Register model client if API key is configured
+    if settings.deepseek_api_key:
+        from app.model.openai_client import OpenAIClient
+        client = OpenAIClient(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.default_model_api_base,
+            model=settings.default_model,
+        )
+        model_router.register("default", client)
+        model_router.switch_to("default")
+
     yield
-    # Shutdown: cleanup
 
 
 app = FastAPI(
@@ -29,6 +56,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(agent_router)
+app.include_router(tool_router)
+app.include_router(model_router_api)
 
 
 @app.get("/health")
