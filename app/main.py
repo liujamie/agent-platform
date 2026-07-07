@@ -61,6 +61,9 @@ app.include_router(agent_router)
 app.include_router(tool_router)
 app.include_router(model_router_api)
 
+from app.api.workflow_routes import router as workflow_router
+app.include_router(workflow_router)
+
 
 @app.get("/health")
 async def health():
