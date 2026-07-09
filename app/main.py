@@ -39,6 +39,11 @@ async def lifespan(app: FastAPI):
         model_router.register("default", client)
         model_router.switch_to("default")
 
+    from app.model.dashscope_client import DashScopeClient
+    if settings.dashscope_api_key:
+        ds_client = DashScopeClient(api_key=settings.dashscope_api_key)
+        model_router.register("dashscope", ds_client)
+
     yield
 
 
@@ -64,10 +69,19 @@ app.include_router(model_router_api)
 from app.api.workflow_routes import router as workflow_router
 app.include_router(workflow_router)
 
+from app.api.admin_routes import router as admin_router
+app.include_router(admin_router)
+
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# Stub: returns a DB session if initialized, or None for graceful fallback without DB.
+# Will be wired properly in the next task (Docker Compose + main.py integration).
+def get_db_session():
+    return None
 
 
 def start():
