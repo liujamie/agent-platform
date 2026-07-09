@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -18,17 +19,43 @@ tool_registry = get_registry()
 from app.model.router import ModelRouter
 model_router = ModelRouter()
 
-# 3. Include API routers
+# 3. Include API routers (at module level so tests without lifespan work)
 from app.api.agent_routes import router as agent_router
 from app.api.tool_routes import router as tool_router
 from app.api.model_routes import router as model_router_api
+from app.api.workflow_routes import router as workflow_router
+from app.api.admin_routes import router as admin_router
+
+_db_session = None  # Set after DB init in lifespan
+
+
+def get_db_session():
+    return _db_session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model_router
+    global model_router, _db_session
 
-    # Register model client if API key is configured
+    # 1. Init Database
+    try:
+        from app.infrastructure.database import init_db, async_session_maker
+        await init_db()
+        _db_session = async_session_maker()
+        print("[init] Database connected")
+    except Exception as e:
+        print(f"[init] Database unavailable (will work without DB): {e}")
+        _db_session = None
+
+    # 2. Init Redis
+    try:
+        from app.infrastructure.redis_client import init_redis
+        await init_redis()
+        print("[init] Redis connected")
+    except Exception as e:
+        print(f"[init] Redis unavailable: {e}")
+
+    # 3. Register model clients
     if settings.deepseek_api_key:
         from app.model.openai_client import OpenAIClient
         client = OpenAIClient(
@@ -39,12 +66,24 @@ async def lifespan(app: FastAPI):
         model_router.register("default", client)
         model_router.switch_to("default")
 
-    from app.model.dashscope_client import DashScopeClient
     if settings.dashscope_api_key:
+        from app.model.dashscope_client import DashScopeClient
         ds_client = DashScopeClient(api_key=settings.dashscope_api_key)
         model_router.register("dashscope", ds_client)
 
     yield
+
+    # Shutdown
+    try:
+        from app.infrastructure.database import close_db
+        await close_db()
+    except Exception:
+        pass
+    try:
+        from app.infrastructure.redis_client import close_redis
+        await close_redis()
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -65,23 +104,14 @@ app.add_middleware(
 app.include_router(agent_router)
 app.include_router(tool_router)
 app.include_router(model_router_api)
-
-from app.api.workflow_routes import router as workflow_router
 app.include_router(workflow_router)
-
-from app.api.admin_routes import router as admin_router
 app.include_router(admin_router)
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
-
-
-# Stub: returns a DB session if initialized, or None for graceful fallback without DB.
-# Will be wired properly in the next task (Docker Compose + main.py integration).
-def get_db_session():
-    return None
+    db_status = "connected" if _db_session is not None else "unavailable"
+    return {"status": "ok", "database": db_status}
 
 
 def start():
