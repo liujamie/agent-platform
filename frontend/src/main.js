@@ -8,6 +8,7 @@ import Workflows from './pages/Workflows.vue'
 import WorkflowForm from './pages/WorkflowForm.vue'
 import Logs from './pages/Logs.vue'
 import Models from './pages/Models.vue'
+import Chat from './pages/Chat.vue'
 import './style.css'
 
 const routes = [
@@ -20,6 +21,7 @@ const routes = [
   { path: '/workflows/:id/edit', component: WorkflowForm },
   { path: '/logs', component: Logs },
   { path: '/models', component: Models },
+  { path: '/chat', component: Chat },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
