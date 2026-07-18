@@ -1,6 +1,5 @@
-version: "3.8"
-
 services:
+  # ─── 后端 API 服务 ───
   agent-platform:
     build: .
     container_name: agent-platform
@@ -22,6 +21,26 @@ services:
       redis:
         condition: service_started
     restart: unless-stopped
+    networks:
+      - agent-network
+    logging: &default-logging
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── 前端 SPA（nginx）───
+  frontend:
+    build: ./frontend
+    container_name: agent-platform-frontend
+    ports:
+      - "80:80"               # 浏览器访问 http://localhost
+    depends_on:
+      - agent-platform
+    restart: unless-stopped
+    networks:
+      - agent-network
+    logging: *default-logging
 
   mysql:
     image: mysql:8.0
@@ -34,13 +53,16 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - D:/mydata/agent-platform-local-data/mysql:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - agent-network
+    logging: *default-logging
 
   redis:
     image: redis:7-alpine
@@ -49,8 +71,13 @@ services:
       - "6379:6379"
     restart: unless-stopped
     volumes:
-      - redis_data:/data
+      - D:/mydata/agent-platform-local-data/redis:/data
+    networks:
+      - agent-network
+    logging: *default-logging
 
-volumes:
-  mysql_data:
-  redis_data:
+
+
+networks:
+  agent-network:
+    driver: bridge

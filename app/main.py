@@ -55,21 +55,42 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[init] Redis unavailable: {e}")
 
-    # 3. Register model clients
-    if settings.deepseek_api_key:
+    # 3. Register model clients from MODEL_CLIENTS config
+    if settings.model_clients:
         from app.model.openai_client import OpenAIClient
-        client = OpenAIClient(
-            api_key=settings.deepseek_api_key,
-            base_url=settings.default_model_api_base,
-            model=settings.default_model,
-        )
-        model_router.register("default", client)
-        model_router.switch_to("default")
-
-    if settings.dashscope_api_key:
         from app.model.dashscope_client import DashScopeClient
-        ds_client = DashScopeClient(api_key=settings.dashscope_api_key)
-        model_router.register("dashscope", ds_client)
+        first_name = None
+        for cfg in settings.model_clients:
+            provider = cfg.get("provider", "openai")
+            name = cfg.get("name", provider)
+            if provider == "dashscope":
+                client = DashScopeClient(api_key=cfg["api_key"], model=cfg.get("model", "qwen-plus"))
+            else:
+                client = OpenAIClient(
+                    api_key=cfg["api_key"],
+                    base_url=cfg.get("base_url", "https://api.deepseek.com"),
+                    model=cfg.get("model", "deepseek-chat"),
+                )
+            model_router.register(name, client)
+            if first_name is None:
+                first_name = name
+        if first_name:
+            model_router.switch_to(first_name)
+    else:
+        # Fallback: legacy single-model config
+        if settings.deepseek_api_key:
+            from app.model.openai_client import OpenAIClient
+            client = OpenAIClient(
+                api_key=settings.deepseek_api_key,
+                base_url=settings.default_model_api_base,
+                model=settings.default_model,
+            )
+            model_router.register("default", client)
+            model_router.switch_to("default")
+        if settings.dashscope_api_key:
+            from app.model.dashscope_client import DashScopeClient
+            ds_client = DashScopeClient(api_key=settings.dashscope_api_key)
+            model_router.register("dashscope", ds_client)
 
     yield
 

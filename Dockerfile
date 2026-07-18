@@ -1,16 +1,29 @@
+# ---- Build stage ----
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Install system build deps
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+
+# Install production dependencies first (cached until pyproject.toml changes)
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir --no-warn-script-location "setuptools>=68.0" && \
+    pip install --no-cache-dir --no-warn-script-location ".[dev]"
+
+
+# ---- Runtime stage ----
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system deps
-RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Install Python dependencies
+# Copy application source
+COPY app/ ./app/
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e ".[dev]"
-
-# Copy application
-COPY . .
 
 # Expose API port
 EXPOSE 8000

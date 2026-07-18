@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,6 +25,9 @@ class Settings(BaseSettings):
     mysql_user: str = "root"
     mysql_password: str = "root"
     mysql_database: str = "agent_platform"
+
+    # Model clients (JSON array)
+    model_clients: list[dict[str, Any]] = []
 
     # Redis
     redis_host: str = "localhost"

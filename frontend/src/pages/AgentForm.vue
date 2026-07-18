@@ -18,9 +18,7 @@
       <div class="form-group">
         <label class="form-label">模型</label>
         <select v-model="form.model_name" class="form-input">
-          <option value="deepseek-chat">DeepSeek Chat</option>
-          <option value="qwen-plus">通义千问 Plus</option>
-          <option value="gpt-4o-mini">GPT-4o Mini</option>
+          <option v-for="m in availableModels" :key="m" :value="m">{{ m }}</option>
         </select>
       </div>
 
@@ -55,11 +53,12 @@ const route = useRoute()
 const router = useRouter()
 const isEdit = computed(() => !!route.params.id)
 const availableTools = ref([])
+const availableModels = ref([])
 
 const form = ref({
   name: '',
   role: '',
-  model_name: 'deepseek-chat',
+  model_name: '',
   tools: [],
   memory_enabled: true,
 })
@@ -70,6 +69,13 @@ onMounted(async () => {
     const data = await res.json()
     availableTools.value = data.tools || []
   } catch { availableTools.value = [] }
+
+  try {
+    const res = await fetch('/api/v1/model/list')
+    const data = await res.json()
+    availableModels.value = data.models || []
+    if (data.current) form.value.model_name = data.current
+  } catch { /* ignore */ }
 
   if (isEdit.value) {
     try {

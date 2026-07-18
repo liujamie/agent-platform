@@ -1,9 +1,39 @@
-__pycache__/
-*.pyc
-.env
+# Git
 .git/
 .gitignore
-node_modules/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+dist/
+*.egg
+
+# Environment & secrets
+.env
+.env.*
+!env.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Frontend (not part of backend image)
 frontend/
+node_modules/
+
+# Tests (not needed in production image)
 tests/
+
+# Documentation
 *.md
+
+# Docker
+docker-compose*.yml
+Dockerfile
