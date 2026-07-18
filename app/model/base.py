@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 from pydantic import BaseModel
 
 
@@ -7,6 +7,7 @@ class ModelResult(BaseModel):
     content: str
     model: str
     usage: dict = {"input": 0, "output": 0}
+    tool_calls: list[dict[str, Any]] | None = None
 
 
 class ModelClient(ABC):

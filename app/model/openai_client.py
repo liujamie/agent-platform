@@ -18,13 +18,28 @@ class OpenAIClient(ModelClient):
         if tools:
             kwargs["tools"] = tools
         response = await self._client.chat.completions.create(**kwargs)
+        msg = response.choices[0].message
+        tool_calls = None
+        if msg.tool_calls:
+            tool_calls = [
+                {
+                    "id": tc.id,
+                    "type": tc.type,
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in msg.tool_calls
+            ]
         return ModelResult(
-            content=response.choices[0].message.content or "",
+            content=msg.content or "",
             model=response.model,
             usage={
                 "input": response.usage.prompt_tokens if response.usage else 0,
                 "output": response.usage.completion_tokens if response.usage else 0,
             },
+            tool_calls=tool_calls,
         )
 
     async def stream(self, messages: list[dict], model: str | None = None, tools: list | None = None) -> AsyncIterator[str]:
