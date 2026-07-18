@@ -7,6 +7,7 @@ import AgentForm from './pages/AgentForm.vue'
 import Workflows from './pages/Workflows.vue'
 import WorkflowForm from './pages/WorkflowForm.vue'
 import Logs from './pages/Logs.vue'
+import Models from './pages/Models.vue'
 import './style.css'
 
 const routes = [
@@ -18,6 +19,7 @@ const routes = [
   { path: '/workflows/new', component: WorkflowForm },
   { path: '/workflows/:id/edit', component: WorkflowForm },
   { path: '/logs', component: Logs },
+  { path: '/models', component: Models },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

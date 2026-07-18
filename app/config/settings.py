@@ -26,8 +26,10 @@ class Settings(BaseSettings):
     mysql_password: str = "root"
     mysql_database: str = "agent_platform"
 
-    # Model clients (JSON array)
+    # Model clients (JSON array, env-based — legacy)
     model_clients: list[dict[str, Any]] = []
+    # Encryption key for model API keys stored in DB
+    model_config_key: str = ""
 
     # Redis
     redis_host: str = "localhost"

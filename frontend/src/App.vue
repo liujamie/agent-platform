@@ -6,6 +6,7 @@
         <router-link to="/">Dashboard</router-link>
         <router-link to="/agents">Agents</router-link>
         <router-link to="/workflows">Workflows</router-link>
+        <router-link to="/models">Models</router-link>
         <router-link to="/logs">Logs</router-link>
       </div>
     </nav>
