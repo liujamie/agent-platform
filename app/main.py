@@ -40,9 +40,9 @@ async def lifespan(app: FastAPI):
 
     # 1. Init Database
     try:
-        from app.infrastructure.database import init_db, async_session_maker
-        await init_db()
-        _db_session = async_session_maker()
+        from app.infrastructure import database as db_module
+        await db_module.init_db()
+        _db_session = db_module.async_session_maker()
         print("[init] Database connected")
     except Exception as e:
         print(f"[init] Database unavailable (will work without DB): {e}")
