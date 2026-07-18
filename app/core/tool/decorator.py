@@ -10,6 +10,20 @@ def get_registry() -> ToolRegistry:
     return _registry
 
 
+def _to_openai_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Convert simple param format {name: {type, description, required?}} to OpenAI JSON Schema."""
+    properties = {}
+    required = []
+    for key, spec in params.items():
+        properties[key] = {k: v for k, v in spec.items() if k != "required"}
+        if spec.get("required"):
+            required.append(key)
+    schema = {"type": "object", "properties": properties}
+    if required:
+        schema["required"] = required
+    return schema
+
+
 def tool(name: str, description: str, parameters: dict[str, Any] | None = None):
     """Decorator that registers an async function as a Tool."""
     def decorator(func):
@@ -30,6 +44,7 @@ def tool(name: str, description: str, parameters: dict[str, Any] | None = None):
 
         _DecoratedTool.name = name
         _DecoratedTool.description = description
+        _DecoratedTool.parameters = _to_openai_params(parameters or {})
         instance = _DecoratedTool()
         _registry.register(instance)
         return wrapper

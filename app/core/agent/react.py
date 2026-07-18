@@ -29,17 +29,10 @@ class ReActAgent(BaseAgent):
         for name in self.config.tools:
             tool = self.tool_registry.get(name)
             if tool:
-                from app.models.tool import ToolSchema
-                if isinstance(tool, ToolSchema):
-                    schemas.append(tool.model_dump())
-                else:
-                    schemas.append({
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": getattr(tool, "description", ""),
-                        },
-                    })
+                func = {"name": tool.name, "description": tool.description}
+                if tool.parameters:
+                    func["parameters"] = tool.parameters
+                schemas.append({"type": "function", "function": func})
         return schemas
 
     def _build_system_message(self) -> dict:
@@ -56,8 +49,8 @@ class ReActAgent(BaseAgent):
         steps = 0
 
         try:
+            self._state_machine.transition(AgentState.RUNNING)
             while steps < self.config.max_iterations:
-                self._state_machine.transition(AgentState.RUNNING)
                 response = await self.model_client.invoke(
                     messages=messages,
                     model=self.config.model,
@@ -87,7 +80,7 @@ class ReActAgent(BaseAgent):
                             "tool_call_id": tc["id"],
                             "content": result.output,
                         })
-                        self._state_machine.transition(AgentState.RUNNING)
+                    self._state_machine.transition(AgentState.RUNNING)
                 else:
                     self._state_machine.transition(AgentState.FINISHED)
                     return AgentResult(
@@ -120,8 +113,8 @@ class ReActAgent(BaseAgent):
         yield AgentEvent(type=AgentEventType.start, content="Agent started")
 
         try:
+            self._state_machine.transition(AgentState.RUNNING)
             while steps < self.config.max_iterations:
-                self._state_machine.transition(AgentState.RUNNING)
                 yield AgentEvent(type=AgentEventType.thinking, content=f"Step {steps + 1}...")
                 steps += 1
 
@@ -132,6 +125,14 @@ class ReActAgent(BaseAgent):
                 )
 
                 if response.tool_calls:
+                    self._state_machine.transition(AgentState.TOOL_CALL)
+                    assistant_msg: dict = {"role": "assistant", "content": response.content}
+                    assistant_msg["tool_calls"] = [
+                        {k: v for k, v in tc.items() if k != "index"}
+                        for tc in response.tool_calls
+                    ]
+                    messages.append(assistant_msg)
+
                     for tc in response.tool_calls:
                         tool_name = tc["function"]["name"]
                         try:
@@ -146,13 +147,6 @@ class ReActAgent(BaseAgent):
                             tool_args=args,
                         )
 
-                        self._state_machine.transition(AgentState.TOOL_CALL)
-                        assistant_msg: dict = {"role": "assistant", "content": response.content}
-                        assistant_msg["tool_calls"] = [
-                            {k: v for k, v in tc.items() if k != "index"}
-                        ]
-                        messages.append(assistant_msg)
-
                         result = await self.tool_registry.execute(tool_name, args)
                         messages.append({
                             "role": "tool",
@@ -165,10 +159,10 @@ class ReActAgent(BaseAgent):
                             content=result.output,
                             tool_result=result.output,
                         )
+                    self._state_machine.transition(AgentState.RUNNING)
                 else:
                     self._state_machine.transition(AgentState.FINISHED)
                     output = response.content or ""
-                    # Yield the full response as chunks (simulate streaming)
                     if output:
                         yield AgentEvent(type=AgentEventType.chunk, content=output)
                     yield AgentEvent(type=AgentEventType.end, content=output)

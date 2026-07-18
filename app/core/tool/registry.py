@@ -23,13 +23,10 @@ class ToolRegistry:
         """Return OpenAI-compatible tool schemas for LLM function calling."""
         schemas = []
         for tool in self._tools.values():
-            schemas.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                },
-            })
+            func = {"name": tool.name, "description": tool.description}
+            if tool.parameters:
+                func["parameters"] = tool.parameters
+            schemas.append({"type": "function", "function": func})
         return schemas
 
     async def execute(self, name: str, args: dict[str, Any]) -> ToolResult:
