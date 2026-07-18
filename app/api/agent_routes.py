@@ -46,6 +46,7 @@ class AgentRunRequest(BaseModel):
 
 class AgentRunByIdRequest(BaseModel):
     message: str
+    session_id: str = ""
 
 
 class AgentRunResponse(BaseModel):
@@ -102,7 +103,7 @@ async def agent_run_by_id(agent_id: int, req: AgentRunByIdRequest):
     model_client = model_router.current_client if model_router else None
     agent = ReActAgent(agent_config, model_client=model_client, tool_registry=tool_registry)
     start = time.time()
-    result = await agent.execute(req.message)
+    result = await agent.execute(req.message, session_id=req.session_id)
     duration = int((time.time() - start) * 1000)
     await _save_run_log(agent_id, req.message, result.output, result.status, duration)
     return AgentRunResponse(
@@ -170,7 +171,7 @@ async def agent_stream_by_id(agent_id: int, req: AgentRunByIdRequest):
     async def event_stream():
         full_output = ""
         start = time.time()
-        async for event in agent.stream(req.message):
+        async for event in agent.stream(req.message, session_id=req.session_id):
             if event.type.value == "end":
                 full_output = event.content or ""
             elif event.type.value == "chunk":

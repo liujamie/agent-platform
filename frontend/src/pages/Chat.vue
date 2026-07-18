@@ -94,6 +94,9 @@ const messagesRef = ref(null)
 const selectedAgent = computed(() =>
   agents.value.find(a => a.id === selectedAgentId.value)
 )
+const sessionId = computed(() =>
+  selectedAgentId.value ? `agent-${selectedAgentId.value}` : ''
+)
 
 onMounted(fetchAgents)
 async function fetchAgents() {
@@ -147,7 +150,7 @@ async function sendMessage() {
     const res = await fetch(`/api/v1/agent/stream/${selectedAgentId.value}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg }),
+      body: JSON.stringify({ message: msg, session_id: sessionId.value }),
       signal: abortController.value.signal,
     })
 

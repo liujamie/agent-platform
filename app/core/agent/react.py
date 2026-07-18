@@ -39,12 +39,33 @@ class ReActAgent(BaseAgent):
         """Build system message with role prompt."""
         return {"role": "system", "content": self.config.role}
 
+    async def _load_history(self, session_id: str) -> list[dict]:
+        """Load conversation history from Redis."""
+        try:
+            from app.infrastructure.redis_client import session_get_messages
+            return await session_get_messages(session_id)
+        except Exception:
+            return []
+
+    async def _save_to_history(self, session_id: str, user_msg: str, assistant_msg: str):
+        """Save a conversation turn to Redis."""
+        try:
+            from app.infrastructure.redis_client import session_add_message
+            await session_add_message(session_id, {"role": "user", "content": user_msg})
+            await session_add_message(session_id, {"role": "assistant", "content": assistant_msg})
+        except Exception:
+            pass
+
     async def execute(self, task_input: str, session_id: str = "") -> AgentResult:
         if self.model_client is None:
             return AgentResult(status="error", output="", error="Model client not configured")
 
         self._state_machine.reset()
-        messages = [self._build_system_message(), {"role": "user", "content": task_input}]
+        messages = [self._build_system_message()]
+        if session_id:
+            history = await self._load_history(session_id)
+            messages.extend(history)
+        messages.append({"role": "user", "content": task_input})
         tool_schemas = self._get_tool_schemas()
         steps = 0
 
@@ -83,6 +104,8 @@ class ReActAgent(BaseAgent):
                     self._state_machine.transition(AgentState.RUNNING)
                 else:
                     self._state_machine.transition(AgentState.FINISHED)
+                    if session_id:
+                        await self._save_to_history(session_id, task_input, response.content or "")
                     return AgentResult(
                         status="success",
                         output=response.content or "",
@@ -106,7 +129,11 @@ class ReActAgent(BaseAgent):
             return
 
         self._state_machine.reset()
-        messages = [self._build_system_message(), {"role": "user", "content": task_input}]
+        messages = [self._build_system_message()]
+        if session_id:
+            history = await self._load_history(session_id)
+            messages.extend(history)
+        messages.append({"role": "user", "content": task_input})
         tool_schemas = self._get_tool_schemas()
         steps = 0
 
@@ -163,6 +190,8 @@ class ReActAgent(BaseAgent):
                 else:
                     self._state_machine.transition(AgentState.FINISHED)
                     output = response.content or ""
+                    if session_id:
+                        await self._save_to_history(session_id, task_input, output)
                     if output:
                         yield AgentEvent(type=AgentEventType.chunk, content=output)
                     yield AgentEvent(type=AgentEventType.end, content=output)
