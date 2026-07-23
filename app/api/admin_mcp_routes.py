@@ -283,7 +283,7 @@ async def list_mcp_tools(conn_id: int):
 
         tools_detail = []
         for tool_name in live["tools"]:
-            tool = mcp_gateway._tool_registry.get(tool_name)
+            tool = mcp_gateway.get_tool(tool_name)
             if tool:
                 tools_detail.append({
                     "name": tool.name,

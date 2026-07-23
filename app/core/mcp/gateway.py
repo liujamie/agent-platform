@@ -105,7 +105,7 @@ class MCPGateway:
                       url: str | None = None, env_vars: dict[str, str] | None = None) -> str:
         """Connect to an MCP server and register its tools.
 
-        Raises RuntimeError on connection failure.
+        Raises on connection failure (re-raises the underlying exception).
         """
         # Disconnect first if already connected
         if name in self._connections:
@@ -172,6 +172,10 @@ class MCPGateway:
             "status": "connected" if wrapper.is_connected else "disconnected",
             "tools": self._wrapped_tools.get(name, []),
         }
+
+    def get_tool(self, tool_name: str) -> BaseTool | None:
+        """Get a registered tool by name."""
+        return self._tool_registry.get(tool_name)
 
     def list_connections(self) -> list[dict]:
         """List all active (in-memory) connections."""
