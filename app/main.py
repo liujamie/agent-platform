@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -15,7 +16,11 @@ from app.core.tool.decorator import get_registry
 import app.tools  # noqa: F401
 tool_registry = get_registry()
 
-# 2. Model Router (model clients registered in lifespan)
+# 2. MCP Gateway
+from app.core.mcp.gateway import MCPGateway
+mcp_gateway = MCPGateway(tool_registry)
+
+# 3. Model Router (model clients registered in lifespan)
 from app.model.router import ModelRouter
 model_router = ModelRouter()
 
@@ -26,6 +31,7 @@ from app.api.model_routes import router as model_router_api
 from app.api.workflow_routes import router as workflow_router
 from app.api.admin_routes import router as admin_router
 from app.api.admin_model_routes import router as admin_model_router
+from app.api.admin_mcp_routes import router as admin_mcp_router
 
 _db_session = None  # Set after DB init in lifespan
 
@@ -102,9 +108,45 @@ async def lifespan(app: FastAPI):
                 ds_client = DashScopeClient(api_key=settings.dashscope_api_key)
                 model_router.register("dashscope", ds_client)
 
+    # 4. Auto-reconnect MCP connections from DB
+    if _db_session is not None:
+        try:
+            from sqlalchemy import select
+            from app.infrastructure.models import MCPConnection
+            result = await _db_session.execute(
+                select(MCPConnection).where(MCPConnection.status.in_(["connected", "error"]))
+            )
+            for mcp_conn in result.scalars().all():
+                try:
+                    await mcp_gateway.connect(
+                        name=mcp_conn.name,
+                        connection_type=mcp_conn.connection_type,
+                        command=mcp_conn.command,
+                        args=mcp_conn.args or [],
+                        url=mcp_conn.url,
+                        env_vars=mcp_conn.env_vars or {},
+                    )
+                    mcp_conn.status = "connected"
+                    mcp_conn.error_message = None
+                except Exception as e:
+                    mcp_conn.status = "error"
+                    mcp_conn.error_message = str(e)
+                mcp_conn.updated_at = datetime.now()
+            await _db_session.commit()
+            print("[init] MCP connections restored")
+        except Exception as e:
+            print(f"[init] MCP connections restore skipped: {e}")
+
     yield
 
     # Shutdown
+    # Disconnect all MCP connections first
+    try:
+        await mcp_gateway.disconnect_all()
+        print("[shutdown] MCP connections closed")
+    except Exception as e:
+        print(f"[shutdown] MCP connections close error: {e}")
+
     try:
         from app.infrastructure.database import close_db
         await close_db()
@@ -138,6 +180,7 @@ app.include_router(model_router_api)
 app.include_router(workflow_router)
 app.include_router(admin_router)
 app.include_router(admin_model_router)
+app.include_router(admin_mcp_router)
 
 
 @app.get("/health")
