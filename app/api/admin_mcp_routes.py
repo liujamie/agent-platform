@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.infrastructure.models import MCPConnection
 
@@ -13,13 +13,12 @@ class MCPCreateRequest(BaseModel):
     name: str
     connection_type: str = "stdio"
     command: str | None = None
-    args: list[str] = []
+    args: list[str] = Field(default_factory=list)
     url: str | None = None
-    env_vars: dict[str, str] = {}
+    env_vars: dict[str, str] = Field(default_factory=dict)
 
 
 class MCPUpdateRequest(BaseModel):
-    name: str | None = None
     connection_type: str | None = None
     command: str | None = None
     args: list[str] | None = None
@@ -84,19 +83,17 @@ async def create_mcp_connection(req: MCPCreateRequest):
             updated_at=datetime.now(),
         )
         session.add(conn)
-        await session.commit()
-        await session.refresh(conn)
 
-        # Auto-connect via MCPGateway
+        # Auto-connect via MCPGateway (commit after gateway operation)
         from app.main import mcp_gateway
         try:
             await mcp_gateway.connect(
-                name=conn.name,
-                connection_type=conn.connection_type,
-                command=conn.command,
-                args=conn.args or [],
-                url=conn.url,
-                env_vars=conn.env_vars or {},
+                name=req.name,
+                connection_type=req.connection_type,
+                command=req.command,
+                args=req.args or [],
+                url=req.url,
+                env_vars=req.env_vars or {},
             )
             conn.status = "connected"
         except Exception as e:
@@ -105,6 +102,7 @@ async def create_mcp_connection(req: MCPCreateRequest):
 
         conn.updated_at = datetime.now()
         await session.commit()
+        await session.refresh(conn)
         return _conn_to_dict(conn)
 
     except HTTPException:
@@ -230,6 +228,7 @@ async def connect_mcp(conn_id: int):
         return _conn_to_dict(conn)
 
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -257,6 +256,7 @@ async def disconnect_mcp(conn_id: int):
         return _conn_to_dict(conn)
 
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
