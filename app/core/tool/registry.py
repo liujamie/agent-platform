@@ -13,6 +13,10 @@ class ToolRegistry:
     def register(self, tool: BaseTool) -> None:
         self._tools[tool.name] = tool
 
+    def unregister(self, name: str) -> None:
+        """Remove a tool by name from the registry."""
+        self._tools.pop(name, None)
+
     def get(self, name: str) -> BaseTool | None:
         return self._tools.get(name)
 

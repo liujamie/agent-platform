@@ -105,7 +105,7 @@ class MCPGateway:
                       url: str | None = None, env_vars: dict[str, str] | None = None) -> str:
         """Connect to an MCP server and register its tools.
 
-        Returns the status: 'connected' or 'error'.
+        Raises RuntimeError on connection failure.
         """
         # Disconnect first if already connected
         if name in self._connections:
@@ -118,8 +118,9 @@ class MCPGateway:
 
         try:
             tools_meta = await wrapper.connect()
-        except Exception as e:
-            await wrapper.disconnect()
+        except Exception:
+            with contextlib.suppress(Exception):
+                await wrapper.disconnect()
             raise
 
         self._connections[name] = wrapper
@@ -151,7 +152,7 @@ class MCPGateway:
         # Unregister tools from ToolRegistry
         tool_names = self._wrapped_tools.get(name, [])
         for tool_name in tool_names:
-            self._tool_registry._tools.pop(tool_name, None)
+            self._tool_registry.unregister(tool_name)
 
         await wrapper.disconnect()
 
