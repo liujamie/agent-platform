@@ -36,13 +36,13 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">单个工具（按住 Ctrl 多选，通常不需要手动选）</label>
+        <label class="form-label">单个工具（按住 Ctrl 多选）</label>
         <select v-model="form.tools" multiple class="form-input" style="height: 120px">
           <optgroup v-for="group in toolGroups" :key="group.label" :label="group.label">
             <option v-for="t in group.tools" :key="t.name" :value="t.name">{{ t.name }} — {{ t.description }}</option>
           </optgroup>
         </select>
-        <p class="form-hint">勾选 MCP 连接后，其工具会自动包含，无需在此重复选择</p>
+        <p class="form-hint">内置工具列表。MCP 工具请在上方通过连接勾选</p>
       </div>
 
       <div class="form-group">
@@ -74,9 +74,9 @@ const availableConnections = ref([])
 const toolGroups = computed(() => {
   const groups = {}
   for (const t of availableTools.value) {
-    const key = t.source || 'built-in'
-    if (!groups[key]) groups[key] = { label: key === 'built-in' ? '内置工具' : `MCP: ${key}`, tools: [] }
-    groups[key].tools.push(t)
+    if (t.source && t.source !== 'built-in') continue  // MCP 工具通过连接管理，不在此显示
+    groups['built-in'] = groups['built-in'] || { label: '内置工具', tools: [] }
+    groups['built-in'].tools.push(t)
   }
   return Object.values(groups)
 })
