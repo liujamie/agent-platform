@@ -36,11 +36,9 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">单个工具（按住 Ctrl 多选）</label>
+        <label class="form-label">内置工具</label>
         <select v-model="form.tools" multiple class="form-input" style="height: 120px">
-          <optgroup v-for="group in toolGroups" :key="group.label" :label="group.label">
-            <option v-for="t in group.tools" :key="t.name" :value="t.name">{{ t.name }} — {{ t.description }}</option>
-          </optgroup>
+          <option v-for="t in builtinTools" :key="t.name" :value="t.name">{{ t.name }} — {{ t.description }}</option>
         </select>
         <p class="form-hint">内置工具列表。MCP 工具请在上方通过连接勾选</p>
       </div>
@@ -71,15 +69,9 @@ const availableTools = ref([])
 const availableModels = ref([])
 const availableConnections = ref([])
 
-const toolGroups = computed(() => {
-  const groups = {}
-  for (const t of availableTools.value) {
-    if (t.source && t.source !== 'built-in') continue  // MCP 工具通过连接管理，不在此显示
-    groups['built-in'] = groups['built-in'] || { label: '内置工具', tools: [] }
-    groups['built-in'].tools.push(t)
-  }
-  return Object.values(groups)
-})
+const builtinTools = computed(() =>
+  availableTools.value.filter(t => !t.source || t.source === 'built-in')
+)
 
 const form = ref({
   name: '',
