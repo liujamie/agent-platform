@@ -9,6 +9,7 @@
         <router-link to="/models">Models</router-link>
         <router-link to="/tools">Tools</router-link>
         <router-link to="/chat">Chat</router-link>
+        <router-link to="/skills">Skills</router-link>
         <router-link to="/logs">Logs</router-link>
       </nav>
     </aside>
