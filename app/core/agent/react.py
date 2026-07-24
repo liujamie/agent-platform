@@ -21,7 +21,49 @@ class ReActAgent(BaseAgent):
         self.mcp_gateway = mcp_gateway
         self._state_machine = AgentStateMachine()
         self._messages: list[dict] = []
-        self._skills_text: str | None = None  # cache for loaded skills
+        self._loaded_skills: set[str] = set()  # track which skills have been loaded
+
+    def _add_skill_schema(self, schemas: list[dict]) -> None:
+        """Add the load_skill tool schema if agent has skills configured."""
+        if not self.config.skills:
+            return
+        schemas.append({
+            "type": "function",
+            "function": {
+                "name": "load_skill",
+                "description": "加载一个专业技能的内容到你的上下文中。当你需要某个领域的专业知识时调用此功能。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "要加载的技能名称",
+                            "enum": list(self.config.skills),
+                        }
+                    },
+                    "required": ["name"],
+                },
+            },
+        })
+
+    async def _fetch_skill_content(self, name: str) -> str | None:
+        """Fetch a single skill's content from database."""
+        try:
+            from app.main import get_db_session
+            session = get_db_session()
+            if not session:
+                return None
+            from sqlalchemy import select
+            from app.infrastructure.models import SkillDefinition
+            result = await session.execute(
+                select(SkillDefinition).where(SkillDefinition.name == name)
+            )
+            skill = result.scalar_one_or_none()
+            if skill:
+                return skill.content
+            return None
+        except Exception:
+            return None
 
     def _get_tool_schemas(self) -> list[dict]:
         """Build OpenAI-compatible tool schemas from config tool names + connections."""
@@ -45,68 +87,47 @@ class ReActAgent(BaseAgent):
                 if tool.parameters:
                     func["parameters"] = tool.parameters
                 schemas.append({"type": "function", "function": func})
+
+        # Add load_skill tool if agent has skills configured
+        self._add_skill_schema(schemas)
+
         return schemas
 
     def _build_system_message(self) -> dict:
         """Build system message with role prompt."""
         return {"role": "system", "content": self.config.role}
 
-    async def _load_history(self, session_id: str) -> list[dict]:
-        """Load conversation history from Redis."""
-        try:
-            from app.infrastructure.redis_client import session_get_messages
-            return await session_get_messages(session_id)
-        except Exception:
-            return []
+    async def _handle_skill_call(self, messages: list, tool_call_id: str, args: dict) -> str:
+        """Handle a load_skill tool call.
 
-    async def _save_to_history(self, session_id: str, user_msg: str, assistant_msg: str):
-        """Save a conversation turn to Redis."""
-        try:
-            from app.infrastructure.redis_client import session_add_message
-            await session_add_message(session_id, {"role": "user", "content": user_msg})
-            await session_add_message(session_id, {"role": "assistant", "content": assistant_msg})
-        except Exception:
-            pass
-
-    async def _load_skills(self) -> str:
-        """Load skill contents and append to system prompt.
-
-        Results are cached after first load to avoid repeated DB queries
-        within the same agent session.
+        Fetches skill content and injects it as a system message.
+        Returns the tool result text for the protocol response.
         """
-        if not self.config.skills:
-            return ""
-        if self._skills_text is not None:
-            return self._skills_text
-        try:
-            from app.main import get_db_session
-            session = get_db_session()
-            if not session:
-                return ""
-            from sqlalchemy import select
-            from app.infrastructure.models import SkillDefinition
-            result = await session.execute(
-                select(SkillDefinition).where(SkillDefinition.name.in_(self.config.skills))
-            )
-            parts = []
-            for skill in result.scalars().all():
-                parts.append(f"[Skill: {skill.name}]\n{skill.content}")
-            self._skills_text = "\n\n" + "\n\n".join(parts)
-            return self._skills_text
-        except Exception:
-            return ""
+        skill_name = args.get("name", "")
+        if not skill_name:
+            return "Error: skill name is required"
+
+        if skill_name in self._loaded_skills:
+            return f"Skill '{skill_name}' is already loaded"
+
+        content = await self._fetch_skill_content(skill_name)
+        if content is None:
+            return f"Error: skill '{skill_name}' not found"
+
+        self._loaded_skills.add(skill_name)
+        # Inject as system message so it stays in context for subsequent turns
+        messages.append({
+            "role": "system",
+            "content": f"[Skill: {skill_name}]\n{content}",
+        })
+        return f"Skill '{skill_name}' loaded ({len(content)} chars)"
 
     async def execute(self, task_input: str, session_id: str = "") -> AgentResult:
         if self.model_client is None:
             return AgentResult(status="error", output="", error="Model client not configured")
 
         self._state_machine.reset()
-        system_msg = self._build_system_message()
-        skill_text = await self._load_skills()
-        if skill_text:
-            system_msg = dict(system_msg)  # copy to avoid mutation issues
-            system_msg["content"] += skill_text
-        messages = [system_msg]
+        messages = [self._build_system_message()]
         if session_id:
             history = await self._load_history(session_id)
             messages.extend(history)
@@ -140,12 +161,20 @@ class ReActAgent(BaseAgent):
                         except json.JSONDecodeError:
                             args = {}
 
-                        result = await self.tool_registry.execute(tool_name, args)
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc["id"],
-                            "content": result.output,
-                        })
+                        if tool_name == "load_skill":
+                            result_text = await self._handle_skill_call(messages, tc["id"], args)
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "content": result_text,
+                            })
+                        else:
+                            result = await self.tool_registry.execute(tool_name, args)
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "content": result.output,
+                            })
                     self._state_machine.transition(AgentState.RUNNING)
                 else:
                     self._state_machine.transition(AgentState.FINISHED)
@@ -174,12 +203,7 @@ class ReActAgent(BaseAgent):
             return
 
         self._state_machine.reset()
-        system_msg = self._build_system_message()
-        skill_text = await self._load_skills()
-        if skill_text:
-            system_msg = dict(system_msg)  # copy to avoid mutation issues
-            system_msg["content"] += skill_text
-        messages = [system_msg]
+        messages = [self._build_system_message()]
         if session_id:
             history = await self._load_history(session_id)
             messages.extend(history)
@@ -224,17 +248,21 @@ class ReActAgent(BaseAgent):
                             tool_args=args,
                         )
 
-                        result = await self.tool_registry.execute(tool_name, args)
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc["id"],
-                            "content": result.output,
-                        })
+                        if tool_name == "load_skill":
+                            result_text = await self._handle_skill_call(messages, tc["id"], args)
+                        else:
+                            result = await self.tool_registry.execute(tool_name, args)
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc["id"],
+                                "content": result.output,
+                            })
+                            result_text = result.output
 
                         yield AgentEvent(
                             type=AgentEventType.tool_result,
-                            content=result.output,
-                            tool_result=result.output,
+                            content=result_text,
+                            tool_result=result_text,
                         )
                     self._state_machine.transition(AgentState.RUNNING)
                 else:
