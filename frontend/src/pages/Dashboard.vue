@@ -18,18 +18,22 @@
       </div>
       <div class="card">
         <div class="card-title">已注册工具</div>
-        <div class="card-value">{{ tools.length }}</div>
+        <div class="card-value">{{ groupedToolCount }}</div>
       </div>
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem">
       <div class="card">
         <h3 style="margin-bottom: 0.75rem">已注册工具</h3>
-        <div v-for="t in tools" :key="t.name" style="padding: 0.5rem 0; border-bottom: 1px solid #eee">
-          <strong>{{ t.name }}</strong>
-          <p style="color: #666; font-size: 0.85rem">{{ t.description }}</p>
+        <div v-for="g in toolGroups" :key="g.label" style="margin-bottom: 0.75rem">
+          <div style="font-size: 0.8rem; color: #999; text-transform: uppercase; margin-bottom: 0.3rem">{{ g.label }}</div>
+          <div v-for="t in g.items" :key="t.name" style="padding: 0.4rem 0; border-bottom: 1px solid #eee">
+            <strong>{{ t.name }}</strong>
+            <span v-if="t.count" class="badge badge-active" style="margin-left: 0.5rem; font-size: 0.75rem">{{ t.count }} 个工具</span>
+            <p v-if="t.description" style="color: #666; font-size: 0.85rem">{{ t.description }}</p>
+          </div>
         </div>
-        <p v-if="tools.length === 0" style="color: #999; font-size: 0.9rem">No tools registered</p>
+        <p v-if="tools.length === 0" style="color: #999; font-size: 0.9rem">暂无已注册工具</p>
       </div>
 
       <div class="card">
@@ -46,11 +50,35 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 const stats = ref({ agent_count: 0, workflow_count: 0, log_count: 0 })
 const tools = ref([])
 const recentLogs = ref([])
+
+const toolGroups = computed(() => {
+  const groups = {}
+  for (const t of tools.value) {
+    const key = t.source && t.source !== 'built-in' ? `MCP: ${t.source}` : '内置工具'
+    if (!groups[key]) groups[key] = { label: key, items: [] }
+    groups[key].items.push(t)
+  }
+  // Merge MCP tools into a single entry per connection
+  const result = []
+  for (const [label, group] of Object.entries(groups)) {
+    if (label === '内置工具') {
+      result.push({ label, items: group.items })
+    } else {
+      const connName = label.replace('MCP: ', '')
+      result.push({ label, items: [{ name: connName, description: `MCP: ${group.items.length} 个工具`, count: group.items.length }] })
+    }
+  }
+  return result
+})
+
+const groupedToolCount = computed(() =>
+  toolGroups.value.reduce((sum, g) => sum + g.items.length, 0)
+)
 
 onMounted(async () => {
   try {
