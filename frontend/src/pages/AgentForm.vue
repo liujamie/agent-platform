@@ -35,6 +35,17 @@
         </div>
       </div>
 
+      <div class="form-group" v-if="availableSkills.length">
+        <label class="form-label">Skills（复选）</label>
+        <div v-for="s in availableSkills" :key="s.name" style="margin: 0.3rem 0">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer">
+            <input type="checkbox" :value="s.name" v-model="form.skills" />
+            <strong>{{ s.name }}</strong>
+            <span style="color: #999; font-size: 0.85rem">{{ s.description }}</span>
+          </label>
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="form-label">内置工具</label>
         <select v-model="form.tools" multiple class="form-input" style="height: 120px">
@@ -68,6 +79,7 @@ const isEdit = computed(() => !!route.params.id)
 const availableTools = ref([])
 const availableModels = ref([])
 const availableConnections = ref([])
+const availableSkills = ref([])
 
 const builtinTools = computed(() =>
   availableTools.value.filter(t => !t.source || t.source === 'built-in')
@@ -79,6 +91,7 @@ const form = ref({
   model_name: '',
   tools: [],
   connections: [],
+  skills: [],
   memory_enabled: true,
 })
 
@@ -101,6 +114,12 @@ onMounted(async () => {
     const data = await res.json()
     availableConnections.value = data.connections || []
   } catch { availableConnections.value = [] }
+
+  try {
+    const res = await fetch('/api/v1/admin/skills/')
+    const data = await res.json()
+    availableSkills.value = data.skills || []
+  } catch { availableSkills.value = [] }
 
   if (isEdit.value) {
     try {
