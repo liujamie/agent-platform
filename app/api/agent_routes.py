@@ -99,6 +99,7 @@ async def agent_run_by_id(agent_id: int, req: AgentRunByIdRequest):
         model=agent_def.model_name,
         tools=agent_def.tools or [],
         connections=agent_def.connections or [],
+        skills=agent_def.skills or [],
         temperature=(agent_def.temperature or 70) / 100,
     )
 
@@ -167,6 +168,7 @@ async def agent_stream_by_id(agent_id: int, req: AgentRunByIdRequest):
         model=agent_def.model_name,
         tools=agent_def.tools or [],
         connections=agent_def.connections or [],
+        skills=agent_def.skills or [],
         temperature=(agent_def.temperature or 70) / 100,
     )
 

@@ -67,12 +67,38 @@ class ReActAgent(BaseAgent):
         except Exception:
             pass
 
+    async def _load_skills(self) -> str:
+        """Load skill contents and append to system prompt."""
+        if not self.config.skills:
+            return ""
+        try:
+            from app.main import get_db_session
+            session = get_db_session()
+            if not session:
+                return ""
+            from sqlalchemy import select
+            from app.infrastructure.models import SkillDefinition
+            result = await session.execute(
+                select(SkillDefinition).where(SkillDefinition.name.in_(self.config.skills))
+            )
+            parts = []
+            for skill in result.scalars().all():
+                parts.append(f"[Skill: {skill.name}]\n{skill.content}")
+            return "\n\n" + "\n\n".join(parts)
+        except Exception:
+            return ""
+
     async def execute(self, task_input: str, session_id: str = "") -> AgentResult:
         if self.model_client is None:
             return AgentResult(status="error", output="", error="Model client not configured")
 
         self._state_machine.reset()
-        messages = [self._build_system_message()]
+        system_msg = self._build_system_message()
+        skill_text = await self._load_skills()
+        if skill_text:
+            system_msg = dict(system_msg)  # copy to avoid mutation issues
+            system_msg["content"] += skill_text
+        messages = [system_msg]
         if session_id:
             history = await self._load_history(session_id)
             messages.extend(history)
@@ -140,7 +166,12 @@ class ReActAgent(BaseAgent):
             return
 
         self._state_machine.reset()
-        messages = [self._build_system_message()]
+        system_msg = self._build_system_message()
+        skill_text = await self._load_skills()
+        if skill_text:
+            system_msg = dict(system_msg)  # copy to avoid mutation issues
+            system_msg["content"] += skill_text
+        messages = [system_msg]
         if session_id:
             history = await self._load_history(session_id)
             messages.extend(history)
