@@ -14,8 +14,8 @@
       </select>
       <label class="chat-tools-label">
         工具:
-        <span v-if="selectedAgent && selectedAgent.tools.length">
-          <code v-for="t in selectedAgent.tools" :key="t" class="tool-tag">{{ t }}</code>
+        <span v-if="resolvedTools.length">
+          <code v-for="t in resolvedTools" :key="t" class="tool-tag">{{ t }}</code>
         </span>
         <span v-else style="color: #999">无</span>
       </label>
@@ -83,6 +83,7 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 
 const agents = ref([])
+const mcpConnections = ref([])
 const selectedAgentId = ref('')
 const inputText = ref('')
 const messages = ref([])
@@ -90,6 +91,22 @@ const loading = ref(false)
 const streamingText = ref('')
 const abortController = ref(null)
 const messagesRef = ref(null)
+
+const resolvedTools = computed(() => {
+  const agent = selectedAgent.value
+  if (!agent) return []
+  const names = new Set(agent.tools || [])
+  // Expand MCP connections into their tool names
+  for (const connName of (agent.connections || [])) {
+    const conn = mcpConnections.value.find(c => c.name === connName)
+    if (conn && conn.tools) {
+      for (const t of conn.tools) names.add(t)
+    } else {
+      names.add(`🔗 ${connName}`)  // connection itself, if tools not loaded
+    }
+  }
+  return [...names].sort()
+})
 
 const selectedAgent = computed(() =>
   agents.value.find(a => a.id === selectedAgentId.value)
@@ -101,10 +118,13 @@ const sessionId = computed(() =>
 onMounted(fetchAgents)
 async function fetchAgents() {
   try {
-    const res = await fetch('/api/v1/admin/agents')
-    const data = await res.json()
-    agents.value = (data.agents || []).filter(a => a.status === 'active')
-  } catch { agents.value = [] }
+    const [agentsRes, mcpRes] = await Promise.all([
+      fetch('/api/v1/admin/agents').then(r => r.json()),
+      fetch('/api/v1/admin/mcp-connections/').then(r => r.json()),
+    ])
+    agents.value = (agentsRes.agents || []).filter(a => a.status === 'active')
+    mcpConnections.value = mcpRes.connections || []
+  } catch { agents.value = []; mcpConnections.value = [] }
 }
 
 function renderContent(text) {
