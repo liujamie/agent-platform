@@ -21,6 +21,7 @@ class ReActAgent(BaseAgent):
         self.mcp_gateway = mcp_gateway
         self._state_machine = AgentStateMachine()
         self._messages: list[dict] = []
+        self._skills_text: str | None = None  # cache for loaded skills
 
     def _get_tool_schemas(self) -> list[dict]:
         """Build OpenAI-compatible tool schemas from config tool names + connections."""
@@ -68,9 +69,15 @@ class ReActAgent(BaseAgent):
             pass
 
     async def _load_skills(self) -> str:
-        """Load skill contents and append to system prompt."""
+        """Load skill contents and append to system prompt.
+
+        Results are cached after first load to avoid repeated DB queries
+        within the same agent session.
+        """
         if not self.config.skills:
             return ""
+        if self._skills_text is not None:
+            return self._skills_text
         try:
             from app.main import get_db_session
             session = get_db_session()
@@ -84,7 +91,8 @@ class ReActAgent(BaseAgent):
             parts = []
             for skill in result.scalars().all():
                 parts.append(f"[Skill: {skill.name}]\n{skill.content}")
-            return "\n\n" + "\n\n".join(parts)
+            self._skills_text = "\n\n" + "\n\n".join(parts)
+            return self._skills_text
         except Exception:
             return ""
 
