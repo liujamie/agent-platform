@@ -32,6 +32,7 @@ from app.api.workflow_routes import router as workflow_router
 from app.api.admin_routes import router as admin_router
 from app.api.admin_model_routes import router as admin_model_router
 from app.api.admin_mcp_routes import router as admin_mcp_router
+from app.api.admin_skill_routes import router as admin_skill_router
 
 _db_session = None  # Set after DB init in lifespan
 
@@ -62,6 +63,25 @@ async def lifespan(app: FastAPI):
                     print("[init] Schema migration: connections column added")
             except Exception:
                 pass  # Column may already exist or MySQL version < 8.0
+
+            # Auto-create skill_definitions table
+            try:
+                async with _db_session() as s:
+                    from sqlalchemy import text
+                    await s.execute(text(
+                        "CREATE TABLE IF NOT EXISTS skill_definitions ("
+                        "  id INTEGER PRIMARY KEY AUTO_INCREMENT,"
+                        "  name VARCHAR(100) NOT NULL UNIQUE COMMENT 'Skill 名称',"
+                        "  description TEXT NULL COMMENT '简要描述',"
+                        "  content TEXT NOT NULL COMMENT 'Markdown 指令正文',"
+                        "  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+                        "  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+                        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='技能定义表'"
+                    ))
+                    await s.commit()
+                    print("[init] Skill table created")
+            except Exception:
+                pass  # Table may already exist
     except Exception as e:
         print(f"[init] Database unavailable (will work without DB): {e}")
         _db_session = None
@@ -193,6 +213,7 @@ app.include_router(workflow_router)
 app.include_router(admin_router)
 app.include_router(admin_model_router)
 app.include_router(admin_mcp_router)
+app.include_router(admin_skill_router)
 
 
 @app.get("/health")
