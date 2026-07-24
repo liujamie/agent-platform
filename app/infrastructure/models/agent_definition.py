@@ -16,6 +16,7 @@ class AgentDefinition(Base):
     role = Column(Text, nullable=False, comment="System prompt")
     model_name = Column(String(50), nullable=False, comment="模型名")
     tools = Column(JSON, nullable=True, comment="绑定的工具列表")
+    connections = Column(JSON, nullable=True, comment="绑定的 MCP 连接列表")
     memory_enabled = Column(Boolean, default=True)
     temperature = Column(Integer, default=70)  # 0-100 scaled
     status = Column(String(20), default="active", comment="active / archived")

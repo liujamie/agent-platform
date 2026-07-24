@@ -23,13 +23,26 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">工具（按住 Ctrl 多选）</label>
-        <select v-model="form.tools" multiple class="form-input" style="height: 160px">
+        <label class="form-label">MCP 连接（勾选后自动包含该连接的全部工具）</label>
+        <div v-if="availableConnections.length === 0" style="color: #999; font-size: 0.9rem; padding: 0.3rem 0">暂无已注册的 MCP 连接，请先到 Tools 页面注册</div>
+        <div v-for="c in availableConnections" :key="c.name" style="margin: 0.3rem 0">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer">
+            <input type="checkbox" :value="c.name" v-model="form.connections" />
+            <strong>{{ c.name }}</strong>
+            <span :class="['badge', c.status === 'connected' ? 'badge-active' : 'badge-archived']" style="font-size: 0.75rem">{{ c.status === 'connected' ? '已连接' : '未连接' }}</span>
+            <span style="color: #999; font-size: 0.85rem">{{ (c.tools || []).length }} 个工具</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">单个工具（按住 Ctrl 多选，通常不需要手动选）</label>
+        <select v-model="form.tools" multiple class="form-input" style="height: 120px">
           <optgroup v-for="group in toolGroups" :key="group.label" :label="group.label">
             <option v-for="t in group.tools" :key="t.name" :value="t.name">{{ t.name }} — {{ t.description }}</option>
           </optgroup>
         </select>
-        <p class="form-hint">Agent 可调用的工具列表</p>
+        <p class="form-hint">勾选 MCP 连接后，其工具会自动包含，无需在此重复选择</p>
       </div>
 
       <div class="form-group">
@@ -56,6 +69,7 @@ const router = useRouter()
 const isEdit = computed(() => !!route.params.id)
 const availableTools = ref([])
 const availableModels = ref([])
+const availableConnections = ref([])
 
 const toolGroups = computed(() => {
   const groups = {}
@@ -72,6 +86,7 @@ const form = ref({
   role: '',
   model_name: '',
   tools: [],
+  connections: [],
   memory_enabled: true,
 })
 
@@ -88,6 +103,12 @@ onMounted(async () => {
     availableModels.value = data.models || []
     if (data.current) form.value.model_name = data.current
   } catch { /* ignore */ }
+
+  try {
+    const res = await fetch('/api/v1/admin/mcp-connections/')
+    const data = await res.json()
+    availableConnections.value = data.connections || []
+  } catch { availableConnections.value = [] }
 
   if (isEdit.value) {
     try {

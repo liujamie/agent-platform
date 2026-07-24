@@ -14,19 +14,30 @@ class ReActAgent(BaseAgent):
     Supports tool calling via OpenAI-compatible function_call API.
     """
 
-    def __init__(self, config: AgentConfig, model_client=None, tool_registry=None):
+    def __init__(self, config: AgentConfig, model_client=None, tool_registry=None, mcp_gateway=None):
         super().__init__(config)
         self.model_client = model_client
         self.tool_registry = tool_registry
+        self.mcp_gateway = mcp_gateway
         self._state_machine = AgentStateMachine()
         self._messages: list[dict] = []
 
     def _get_tool_schemas(self) -> list[dict]:
-        """Build OpenAI-compatible tool schemas from config tool names."""
-        if not self.tool_registry or not self.config.tools:
+        """Build OpenAI-compatible tool schemas from config tool names + connections."""
+        if not self.tool_registry:
             return []
+        tool_names = set(self.config.tools or [])
+
+        # Expand MCP connections into their tool names
+        if self.mcp_gateway and self.config.connections:
+            for conn_name in self.config.connections:
+                conn = self.mcp_gateway.get_connection(conn_name)
+                if conn:
+                    for t in (conn.get("tools") or []):
+                        tool_names.add(t)
+
         schemas = []
-        for name in self.config.tools:
+        for name in sorted(tool_names):
             tool = self.tool_registry.get(name)
             if tool:
                 func = {"name": tool.name, "description": tool.description}

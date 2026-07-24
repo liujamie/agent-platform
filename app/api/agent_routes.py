@@ -64,7 +64,8 @@ async def agent_run(req: AgentRunRequest):
     if model_router:
         model_client = model_router.current_client
 
-    agent = ReActAgent(req.agent_config, model_client=model_client, tool_registry=tool_registry)
+    from app.main import mcp_gateway
+    agent = ReActAgent(req.agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway)
     result = await agent.execute(req.message)
     return AgentRunResponse(
         status=result.status,
@@ -97,11 +98,13 @@ async def agent_run_by_id(agent_id: int, req: AgentRunByIdRequest):
         role=agent_def.role or "",
         model=agent_def.model_name,
         tools=agent_def.tools or [],
+        connections=agent_def.connections or [],
         temperature=(agent_def.temperature or 70) / 100,
     )
 
     model_client = model_router.current_client if model_router else None
-    agent = ReActAgent(agent_config, model_client=model_client, tool_registry=tool_registry)
+    from app.main import mcp_gateway
+    agent = ReActAgent(agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway)
     start = time.time()
     result = await agent.execute(req.message, session_id=req.session_id)
     duration = int((time.time() - start) * 1000)
@@ -122,7 +125,8 @@ async def agent_stream(req: AgentRunRequest):
     if model_router:
         model_client = model_router.current_client
 
-    agent = ReActAgent(req.agent_config, model_client=model_client, tool_registry=tool_registry)
+    from app.main import mcp_gateway
+    agent = ReActAgent(req.agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway)
 
     async def event_stream():
         async for event in agent.stream(req.message):
@@ -162,11 +166,13 @@ async def agent_stream_by_id(agent_id: int, req: AgentRunByIdRequest):
         role=agent_def.role or "",
         model=agent_def.model_name,
         tools=agent_def.tools or [],
+        connections=agent_def.connections or [],
         temperature=(agent_def.temperature or 70) / 100,
     )
 
     model_client = model_router.current_client if model_router else None
-    agent = ReActAgent(agent_config, model_client=model_client, tool_registry=tool_registry)
+    from app.main import mcp_gateway
+    agent = ReActAgent(agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway)
 
     async def event_stream():
         full_output = ""

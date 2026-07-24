@@ -20,6 +20,7 @@ class AgentConfig(BaseModel):
     role: str
     model: str
     tools: list[str] = Field(default_factory=list)
+    connections: list[str] = Field(default_factory=list, description="MCP connection names (all their tools will be included)")
     max_iterations: int = 10
     temperature: float = Field(default=0.7, ge=0, le=2)
     max_tokens: int = 4096

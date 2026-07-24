@@ -16,6 +16,7 @@ class AgentCreateRequest(BaseModel):
     role: str
     model_name: str
     tools: list[str] = []
+    connections: list[str] = []
     memory_enabled: bool = True
     temperature: int = 70
 
@@ -25,6 +26,7 @@ class AgentUpdateRequest(BaseModel):
     role: str | None = None
     model_name: str | None = None
     tools: list[str] | None = None
+    connections: list[str] | None = None
     memory_enabled: bool | None = None
     temperature: int | None = None
     status: str | None = None
@@ -61,6 +63,7 @@ async def create_agent(req: AgentCreateRequest):
             role=req.role,
             model_name=req.model_name,
             tools=req.tools,
+            connections=req.connections,
             memory_enabled=req.memory_enabled,
             temperature=req.temperature,
             status="active",
@@ -341,6 +344,7 @@ def _agent_to_dict(agent):
         "role": agent.role,
         "model_name": agent.model_name,
         "tools": agent.tools or [],
+        "connections": agent.connections or [],
         "memory_enabled": agent.memory_enabled,
         "temperature": agent.temperature,
         "status": agent.status,
