@@ -96,14 +96,9 @@ const resolvedTools = computed(() => {
   const agent = selectedAgent.value
   if (!agent) return []
   const names = new Set(agent.tools || [])
-  // Expand MCP connections into their tool names
+  // Show MCP connection names as-is (not expanded into individual tools)
   for (const connName of (agent.connections || [])) {
-    const conn = mcpConnections.value.find(c => c.name === connName)
-    if (conn && conn.tools) {
-      for (const t of conn.tools) names.add(t)
-    } else {
-      names.add(`🔗 ${connName}`)  // connection itself, if tools not loaded
-    }
+    names.add(`🔗 ${connName}`)
   }
   return [...names].sort()
 })
