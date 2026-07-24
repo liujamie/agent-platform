@@ -50,6 +50,18 @@ async def lifespan(app: FastAPI):
         await db_module.init_db()
         _db_session = db_module.async_session_maker()
         print("[init] Database connected")
+        # Auto-migrate: add connections column to existing agent_definitions table
+        if _db_session is not None:
+            try:
+                async with _db_session() as s:
+                    from sqlalchemy import text
+                    await s.execute(text(
+                        "ALTER TABLE agent_definitions ADD COLUMN IF NOT EXISTS connections JSON NULL COMMENT '绑定的 MCP 连接列表' AFTER tools"
+                    ))
+                    await s.commit()
+                    print("[init] Schema migration: connections column added")
+            except Exception:
+                pass  # Column may already exist or MySQL version < 8.0
     except Exception as e:
         print(f"[init] Database unavailable (will work without DB): {e}")
         _db_session = None
