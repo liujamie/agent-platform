@@ -15,7 +15,7 @@ async def list_tools():
 
     tools = []
     for t in tool_registry.list_tools():
-        tools.append({"name": t.name, "description": t.description})
+        tools.append({"name": t.name, "description": t.description, "source": t.source})
     return {"tools": tools}
 
 

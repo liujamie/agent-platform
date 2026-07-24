@@ -24,8 +24,10 @@
 
       <div class="form-group">
         <label class="form-label">工具（按住 Ctrl 多选）</label>
-        <select v-model="form.tools" multiple class="form-input" style="height: 100px">
-          <option v-for="t in availableTools" :key="t.name" :value="t.name">{{ t.name }} — {{ t.description }}</option>
+        <select v-model="form.tools" multiple class="form-input" style="height: 160px">
+          <optgroup v-for="group in toolGroups" :key="group.label" :label="group.label">
+            <option v-for="t in group.tools" :key="t.name" :value="t.name">{{ t.name }} — {{ t.description }}</option>
+          </optgroup>
         </select>
         <p class="form-hint">Agent 可调用的工具列表</p>
       </div>
@@ -54,6 +56,16 @@ const router = useRouter()
 const isEdit = computed(() => !!route.params.id)
 const availableTools = ref([])
 const availableModels = ref([])
+
+const toolGroups = computed(() => {
+  const groups = {}
+  for (const t of availableTools.value) {
+    const key = t.source || 'built-in'
+    if (!groups[key]) groups[key] = { label: key === 'built-in' ? '内置工具' : `MCP: ${key}`, tools: [] }
+    groups[key].tools.push(t)
+  }
+  return Object.values(groups)
+})
 
 const form = ref({
   name: '',

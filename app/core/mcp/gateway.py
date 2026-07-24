@@ -22,6 +22,10 @@ class MCPToolWrapper(BaseTool):
         self._gateway = gateway
         self._mcp_tool_name = mcp_tool.name
 
+    @property
+    def source(self) -> str:
+        return self._connection_name
+
     async def execute(self, **kwargs) -> ToolResult:
         try:
             result = await self._gateway.call_tool(self._connection_name, self._mcp_tool_name, kwargs)
