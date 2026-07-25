@@ -41,6 +41,12 @@ def get_db_session():
     return _db_session
 
 
+def _set_db_session(session):
+    """Allow CLI commands to set the DB session without running lifespan."""
+    global _db_session
+    _db_session = session
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global model_router, _db_session
@@ -51,37 +57,6 @@ async def lifespan(app: FastAPI):
         await db_module.init_db()
         _db_session = db_module.async_session_maker()
         print("[init] Database connected")
-        # Auto-migrate: add connections column to existing agent_definitions table
-        if _db_session is not None:
-            try:
-                async with _db_session() as s:
-                    from sqlalchemy import text
-                    await s.execute(text(
-                        "ALTER TABLE agent_definitions ADD COLUMN IF NOT EXISTS connections JSON NULL COMMENT '绑定的 MCP 连接列表' AFTER tools"
-                    ))
-                    await s.commit()
-                    print("[init] Schema migration: connections column added")
-            except Exception:
-                pass  # Column may already exist or MySQL version < 8.0
-
-            # Auto-create skill_definitions table
-            try:
-                async with _db_session() as s:
-                    from sqlalchemy import text
-                    await s.execute(text(
-                        "CREATE TABLE IF NOT EXISTS skill_definitions ("
-                        "  id INTEGER PRIMARY KEY AUTO_INCREMENT,"
-                        "  name VARCHAR(100) NOT NULL UNIQUE COMMENT 'Skill 名称',"
-                        "  description TEXT NULL COMMENT '简要描述',"
-                        "  content TEXT NOT NULL COMMENT 'Markdown 指令正文',"
-                        "  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
-                        "  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
-                        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='技能定义表'"
-                    ))
-                    await s.commit()
-                    print("[init] Skill table created")
-            except Exception:
-                pass  # Table may already exist
     except Exception as e:
         print(f"[init] Database unavailable (will work without DB): {e}")
         _db_session = None

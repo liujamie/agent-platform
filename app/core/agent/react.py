@@ -47,23 +47,9 @@ class ReActAgent(BaseAgent):
         })
 
     async def _fetch_skill_content(self, name: str) -> str | None:
-        """Fetch a single skill's content from database."""
-        try:
-            from app.main import get_db_session
-            session = get_db_session()
-            if not session:
-                return None
-            from sqlalchemy import select
-            from app.infrastructure.models import SkillDefinition
-            result = await session.execute(
-                select(SkillDefinition).where(SkillDefinition.name == name)
-            )
-            skill = result.scalar_one_or_none()
-            if skill:
-                return skill.content
-            return None
-        except Exception:
-            return None
+        """Load a skill's content from the filesystem (skills/{name}/)."""
+        from app.core.skill.loader import load_skill_content
+        return await load_skill_content(name)
 
     def _get_tool_schemas(self) -> list[dict]:
         """Build OpenAI-compatible tool schemas from config tool names + connections."""

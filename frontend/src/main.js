@@ -11,6 +11,7 @@ import Models from './pages/Models.vue'
 import Chat from './pages/Chat.vue'
 import Tools from './pages/Tools.vue'
 import Skills from './pages/Skills.vue'
+import SkillGuide from './pages/SkillGuide.vue'
 import './style.css'
 
 const routes = [
@@ -26,6 +27,7 @@ const routes = [
   { path: '/chat', component: Chat },
   { path: '/tools', component: Tools },
   { path: '/skills', component: Skills },
+  { path: '/skills/guide', component: SkillGuide },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
