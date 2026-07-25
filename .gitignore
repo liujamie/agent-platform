@@ -17,3 +17,9 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Frontend dependencies
+frontend/node_modules/
+
+# Docs (local planning files)
+docs/
