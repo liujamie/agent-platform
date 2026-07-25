@@ -1,0 +1,4 @@
+name: code-review
+description: 代码审查专家，识别 Bug、性能问题、安全漏洞和代码异味
+tags: [review, quality, security, performance]
+version: 1.0.0
