@@ -41,6 +41,19 @@
     <p v-if="workflows.length === 0" style="text-align:center;color:#999;padding:2rem">暂无 Workflow 定义</p>
 
     <!-- Run Logs -->
+    <!-- Run Input Modal -->
+    <div v-if="showRunModal" class="modal-overlay" @click.self="showRunModal = false">
+      <div class="modal" style="max-width:500px">
+        <h2 style="font-size:0.95rem;margin-bottom:0.5rem">运行 Workflow</h2>
+        <p style="font-size:0.78rem;color:#666;margin-bottom:0.75rem">输入参数（JSON 格式，节点中通过 {{ input.xxx }} 引用）</p>
+        <textarea v-model="runInputJson" class="form-textarea" rows="8" style="font-family:monospace;font-size:0.78rem" placeholder='{"code_diff": "diff --git a/src/main.py b/src/main.py\n+ print(1/0)"}'></textarea>
+        <div style="display:flex;gap:0.4rem;justify-content:flex-end;margin-top:0.75rem">
+          <button @click="showRunModal = false" class="btn btn-outline btn-sm">取消</button>
+          <button @click="confirmRun" class="btn btn-primary btn-sm" :disabled="runningWf">{{ runningWf ? '运行中...' : '运行' }}</button>
+        </div>
+      </div>
+    </div>
+
     <div style="margin-top:1.5rem">
       <h2 style="font-size:1rem;margin-bottom:0.5rem">运行历史</h2>
       <table class="data-table">
@@ -77,6 +90,10 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 const workflows = ref([])
 const instances = ref([])
+const showRunModal = ref(false)
+const runInputJson = ref('')
+const runWfId = ref(null)
+const runningWf = ref(false)
 
 onMounted(async () => {
   await fetchWorkflows()
@@ -111,17 +128,32 @@ async function fetchInstances() {
 }
 
 async function runWorkflow(id) {
+  runWfId.value = id
+  runInputJson.value = ''
+  showRunModal.value = true
+}
+
+async function confirmRun() {
+  showRunModal.value = false
+  runningWf.value = true
+  let inputData = {}
+  if (runInputJson.value.trim()) {
+    try { inputData = JSON.parse(runInputJson.value) }
+    catch { alert('JSON 格式错误，请检查'); runningWf.value = false; return }
+  }
   try {
-    const res = await fetch(`/api/v1/workflow/run/${id}`, {
+    const res = await fetch(`/api/v1/workflow/run/${runWfId.value}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflow_id: id, input_data: {} }),
+      body: JSON.stringify({ workflow_id: runWfId.value, input_data: inputData }),
     })
     const result = await res.json()
     alert(`Workflow 已完成\n状态: ${result.status}\n耗时: ${result.duration_ms}ms`)
     await fetchInstances()
   } catch (e) {
     alert('执行失败: ' + e.message)
+  } finally {
+    runningWf.value = false
   }
 }
 
@@ -134,3 +166,14 @@ async function deleteWorkflow(id) {
 function formatDate(d) { return d ? new Date(d).toLocaleDateString('zh-CN') : '-' }
 function formatTime(d) { return d ? new Date(d).toLocaleString('zh-CN') : '-' }
 </script>
+
+<style scoped>
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.modal {
+  background: white; border-radius: 8px; padding: 1.5rem;
+  width: 90%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+</style>
