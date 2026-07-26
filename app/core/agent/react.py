@@ -1,4 +1,5 @@
 import json
+import time
 from typing import AsyncIterator
 
 from app.core.agent.base import BaseAgent
@@ -141,10 +142,15 @@ class ReActAgent(BaseAgent):
         if self.model_client is None:
             return AgentResult(status="error", output="", error="Model client not configured")
 
+        _t = {}  # timing
         self._state_machine.reset()
         messages = [self._build_system_message()]
         if session_id:
+            t0 = time.time()
             history = await self._load_history(session_id)
+            _t["load_history"] = round(time.time() - t0, 3)
+
+            t0 = time.time()
             from app.core.memory.manager import build_context
             history = await build_context(
                 history,
@@ -153,19 +159,24 @@ class ReActAgent(BaseAgent):
                 agent_id=self._agent_id,
                 query=task_input,
             )
+            _t["build_memory"] = round(time.time() - t0, 3)
             messages.extend(history)
         messages.append({"role": "user", "content": task_input})
+        t0 = time.time()
         tool_schemas = self._get_tool_schemas()
+        _t["build_tools"] = round(time.time() - t0, 3)
         steps = 0
 
         try:
             self._state_machine.transition(AgentState.RUNNING)
             while steps < self.config.max_iterations:
+                t0 = time.time()
                 response = await self.model_client.invoke(
                     messages=messages,
                     model=self.config.model,
                     tools=tool_schemas or None,
                 )
+                _t["llm_invoke"] = round(time.time() - t0, 3)
                 steps += 1
 
                 if response.tool_calls:
@@ -184,6 +195,7 @@ class ReActAgent(BaseAgent):
                         except json.JSONDecodeError:
                             args = {}
 
+                        t0 = time.time()
                         if tool_name == "load_skill":
                             result_text = await self._handle_skill_call(messages, tc["id"], args)
                             messages.append({
@@ -198,19 +210,24 @@ class ReActAgent(BaseAgent):
                                 "tool_call_id": tc["id"],
                                 "content": result.output,
                             })
+                        _t[f"tool_{tool_name}"] = round(time.time() - t0, 3)
                     self._state_machine.transition(AgentState.RUNNING)
                 else:
                     self._state_machine.transition(AgentState.FINISHED)
                     if session_id:
+                        t0 = time.time()
                         await self._save_to_history(session_id, task_input, response.content or "")
-                    # Extract episodic memories
+                        _t["save_history"] = round(time.time() - t0, 3)
                     if self._agent_id and session_id:
+                        t0 = time.time()
                         from app.core.memory.episodic import extract_and_save
                         await extract_and_save(
                             self._agent_id, session_id,
                             task_input, response.content or "",
                             self.model_client,
                         )
+                        _t["extract_episodic"] = round(time.time() - t0, 3)
+                    print(f"[timing] {_t}")
                     return AgentResult(
                         status="success",
                         output=response.content or "",
@@ -233,10 +250,15 @@ class ReActAgent(BaseAgent):
             yield AgentEvent(type=AgentEventType.error, content="Model client not configured")
             return
 
+        _t = {}
         self._state_machine.reset()
         messages = [self._build_system_message()]
         if session_id:
+            t0 = time.time()
             history = await self._load_history(session_id)
+            _t["load_history"] = round(time.time() - t0, 3)
+
+            t0 = time.time()
             from app.core.memory.manager import build_context
             history = await build_context(
                 history,
@@ -245,6 +267,7 @@ class ReActAgent(BaseAgent):
                 agent_id=self._agent_id,
                 query=task_input,
             )
+            _t["build_memory"] = round(time.time() - t0, 3)
             messages.extend(history)
         messages.append({"role": "user", "content": task_input})
         tool_schemas = self._get_tool_schemas()
@@ -258,11 +281,13 @@ class ReActAgent(BaseAgent):
                 yield AgentEvent(type=AgentEventType.thinking, content=f"Step {steps + 1}...")
                 steps += 1
 
+                t0 = time.time()
                 response = await self.model_client.invoke(
                     messages=messages,
                     model=self.config.model,
                     tools=tool_schemas or None,
                 )
+                _t["llm_invoke"] = round(time.time() - t0, 3)
 
                 if response.tool_calls:
                     self._state_machine.transition(AgentState.TOOL_CALL)
@@ -308,15 +333,19 @@ class ReActAgent(BaseAgent):
                     self._state_machine.transition(AgentState.FINISHED)
                     output = response.content or ""
                     if session_id:
+                        t0 = time.time()
                         await self._save_to_history(session_id, task_input, output)
-                    # Extract episodic memories
+                        _t["save_history"] = round(time.time() - t0, 3)
                     if self._agent_id and session_id:
+                        t0 = time.time()
                         from app.core.memory.episodic import extract_and_save
                         await extract_and_save(
                             self._agent_id, session_id,
                             task_input, output,
                             self.model_client,
                         )
+                        _t["extract_episodic"] = round(time.time() - t0, 3)
+                    print(f"[timing] {_t}")
                     if output:
                         yield AgentEvent(type=AgentEventType.chunk, content=output)
                     yield AgentEvent(type=AgentEventType.end, content=output)

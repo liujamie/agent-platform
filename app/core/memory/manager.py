@@ -10,6 +10,7 @@ MemoryManager — Agent 工作上下文管理。
     - 摘要本身也作为一条 system 消息参与上下文
 """
 
+import time
 from typing import Any
 
 # Rough token estimation: 1 token ≈ 2 chars for CJK
@@ -72,14 +73,15 @@ async def build_context(
     memory_lines = []
 
     if agent_id is not None:
-        # 0a: Episodic — recent important facts
+        _t0 = time.time()
         from app.core.memory.episodic import retrieve as retrieve_episodes
         episodes = await retrieve_episodes(agent_id, limit=3)
+        _t_ep = round(time.time() - _t0, 3)
         for e in episodes:
             memory_lines.append(f"- [{e['type']}] {e['content']}")
 
-        # 0b: Semantic — query-relevant facts (if user provided a query)
         if query:
+            _t0 = time.time()
             try:
                 from app.core.memory.semantic import search_memories
                 semantic_hits = await search_memories(agent_id, query, top_k=3, min_score=0.7)
@@ -87,6 +89,11 @@ async def build_context(
                     memory_lines.append(f"- 🔍 {hit['content']}")
             except Exception:
                 pass
+            _t_sem = round(time.time() - _t0, 3)
+        else:
+            _t_sem = 0
+
+        print(f"[timing.memory] episodic={_t_ep}s semantic={_t_sem}s")
 
     episode_msg = None
     if memory_lines:

@@ -16,21 +16,28 @@ from app.config.settings import get_settings
 from app.infrastructure.models import MemorySemantic as SemanticMemoryModel
 
 
-# ── Embedding API ────────────────────────────────────
+# ── Embedding API (reuse client across calls) ────────
+
+_embed_client: AsyncOpenAI | None = None
+
 
 def _get_client() -> AsyncOpenAI | None:
-    """Create an OpenAI-compatible client for SiliconFlow embedding API."""
+    """Get or create the shared SiliconFlow client (singleton)."""
+    global _embed_client
+    if _embed_client is not None:
+        return _embed_client
     settings = get_settings()
     if not settings.siliconflow_api_key:
         return None
-    return AsyncOpenAI(
+    _embed_client = AsyncOpenAI(
         api_key=settings.siliconflow_api_key,
         base_url="https://api.siliconflow.cn/v1",
     )
+    return _embed_client
 
 
 async def embed_text(text: str) -> list[float] | None:
-    """Convert text to vector embedding via SiliconFlow API."""
+    """Convert text to vector embedding via SiliconFlow API (timeout 2s)."""
     client = _get_client()
     if client is None:
         return None
@@ -39,6 +46,7 @@ async def embed_text(text: str) -> list[float] | None:
         response = await client.embeddings.create(
             input=text,
             model=settings.embedding_model,
+            timeout=2.0,
         )
         return response.data[0].embedding
     except Exception:
