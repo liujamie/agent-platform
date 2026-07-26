@@ -1,81 +1,101 @@
 <template>
-  <div>
-    <div class="page-actions">
+  <div class="chat-layout">
+    <!-- Header -->
+    <div class="chat-header">
       <h1 class="page-title" style="margin-bottom: 0">Agent 对话</h1>
-      <button v-if="messages.length" @click="newChat" class="btn btn-outline">新建对话</button>
+      <button v-if="currentSessionId && !loading" @click="newChat" class="btn btn-outline">+ 新建对话</button>
     </div>
 
-    <!-- Agent 选择 + 设置 -->
-    <div class="chat-toolbar">
-      <select v-model="selectedAgentId" class="form-input" style="max-width: 300px">
-        <option value="" disabled>-- 选择 Agent --</option>
-        <option v-for="a in agents" :key="a.id" :value="a.id">
-          {{ a.name }} ({{ a.model_name }})
-        </option>
-      </select>
-      <label class="chat-tools-label">
-        工具:
-        <span v-if="resolvedTools.length">
-          <code v-for="t in resolvedTools" :key="t" class="tool-tag">{{ t }}</code>
-        </span>
-        <span v-else style="color: #999">无</span>
-      </label>
-    </div>
+    <div class="chat-body">
+      <!-- Left: Session sidebar -->
+      <aside class="session-sidebar">
+        <div class="session-sidebar-header">
+          <span style="font-weight: 600; font-size: 0.9rem">会话历史</span>
+        </div>
 
-    <!-- 对话区域 -->
-    <div class="chat-messages" ref="messagesRef">
-      <div v-if="messages.length === 0" class="chat-empty">
-        <p>选择一个 Agent，输入消息开始对话</p>
-      </div>
-      <div v-for="(msg, i) in messages" :key="i" :class="['chat-msg', msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-agent']">
-        <div class="chat-avatar">{{ msg.role === 'user' ? '👤' : '🤖' }}</div>
-        <div class="chat-bubble">
-          <div v-if="msg.thinking" class="chat-thinking">
-            <span v-for="(step, si) in msg.thinking" :key="si" class="thinking-step">
-              {{ step }}
-            </span>
+        <div class="session-list">
+          <div
+            v-for="s in sessions"
+            :key="s.session_id"
+            :class="['session-item', { active: s.session_id === currentSessionId }]"
+            @click="switchSession(s)"
+          >
+            <div class="session-name">{{ s.name }}</div>
+            <div class="session-meta">{{ formatTime(s.created_at) }} · {{ s.message_count }} 条</div>
+            <button v-if="s.session_id === currentSessionId" class="session-del" @click.stop="deleteSession(s)" title="删除会话">×</button>
           </div>
-          <div v-if="msg.content" class="chat-content" v-html="renderContent(msg.content)"></div>
-          <div v-if="msg.tool_calls && msg.tool_calls.length" class="chat-tools">
-            <div v-for="tc in msg.tool_calls" :key="tc.id" class="tool-call">
-              🔧 {{ tc.function.name }}({{ tc.function.arguments }})
+          <div v-if="sessions.length === 0" class="session-empty">
+            <p v-if="!selectedAgentId">选择一个 Agent 开始</p>
+            <p v-else>暂无历史会话，点击上方新建</p>
+          </div>
+        </div>
+
+        <!-- Agent selector at the bottom of sidebar -->
+        <div class="session-sidebar-footer">
+          <select v-model="selectedAgentId" class="form-input agent-select" @change="onAgentChange">
+            <option value="" disabled>-- 选择 Agent --</option>
+            <option v-for="a in agents" :key="a.id" :value="a.id">
+              {{ a.name }} ({{ a.model_name }})
+            </option>
+          </select>
+          <div v-if="selectedAgent" class="agent-tools">
+            <span style="font-size: 0.75rem; color: #999">工具: </span>
+            <code v-for="t in resolvedTools" :key="t" class="tool-tag">{{ t }}</code>
+            <span v-if="!resolvedTools.length" style="font-size: 0.75rem; color: #999">无</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right: Chat area -->
+      <main class="chat-main">
+        <div class="chat-messages" ref="messagesRef">
+          <div v-if="messages.length === 0" class="chat-empty">
+            <p v-if="!selectedAgentId">选择一个 Agent，输入消息开始对话</p>
+            <p v-else>开始一个新对话吧</p>
+          </div>
+          <div v-for="(msg, i) in messages" :key="i" :class="['chat-msg', msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-agent']">
+            <div class="chat-avatar">{{ msg.role === 'user' ? '👤' : '🤖' }}</div>
+            <div class="chat-bubble">
+              <div v-if="msg.thinking && msg.thinking.length" class="chat-thinking">
+                <span v-for="(step, si) in msg.thinking" :key="si" class="thinking-step">{{ step }}</span>
+              </div>
+              <div v-if="msg.content" class="chat-content" v-html="renderContent(msg.content)"></div>
+              <div v-if="msg.tool_calls && msg.tool_calls.length" class="chat-tools">
+                <div v-for="tc in msg.tool_calls" :key="tc.id" class="tool-call">🔧 {{ tc.function.name }}({{ tc.function.arguments }})</div>
+              </div>
+              <div v-if="msg.tool_results && msg.tool_results.length" class="chat-tool-results">
+                <div v-for="(tr, ti) in msg.tool_results" :key="ti" class="tool-result">📦 {{ tr }}</div>
+              </div>
             </div>
           </div>
-          <div v-if="msg.tool_results && msg.tool_results.length" class="chat-tool-results">
-            <div v-for="(tr, ti) in msg.tool_results" :key="ti" class="tool-result">
-              📦 {{ tr }}
+          <div v-if="loading" class="chat-msg chat-msg-agent">
+            <div class="chat-avatar">🤖</div>
+            <div class="chat-bubble">
+              <div class="chat-typing">
+                <span v-if="streamingText">{{ streamingText }}</span>
+                <span v-else class="typing-dots"><span>.</span><span>.</span><span>.</span></span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div v-if="loading" class="chat-msg chat-msg-agent">
-        <div class="chat-avatar">🤖</div>
-        <div class="chat-bubble">
-          <div class="chat-typing">
-            <span v-if="streamingText">{{ streamingText }}</span>
-            <span v-else class="typing-dots"><span>.</span><span>.</span><span>.</span></span>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- 输入区域 -->
-    <div class="chat-input-area">
-      <textarea
-        v-model="inputText"
-        class="form-input chat-input"
-        placeholder="输入消息..."
-        rows="2"
-        @keydown.enter.prevent="sendMessage"
-        :disabled="loading || !selectedAgentId"
-      ></textarea>
-      <button
-        @click="sendMessage"
-        class="btn btn-primary send-btn"
-        :disabled="loading || !selectedAgentId || !inputText.trim()"
-      >
-        {{ loading ? '停止' : '发送' }}
-      </button>
+        <!-- Input area -->
+        <div class="chat-input-area">
+          <textarea
+            v-model="inputText"
+            class="form-input chat-input"
+            :placeholder="inputPlaceholder"
+            rows="2"
+            @keydown.enter.prevent="sendMessage"
+            :disabled="loading || !selectedAgentId"
+          ></textarea>
+          <button
+            @click="sendMessage"
+            class="btn btn-primary send-btn"
+            :disabled="loading || !selectedAgentId || !inputText.trim()"
+          >{{ loading ? '停止' : '发送' }}</button>
+        </div>
+      </main>
     </div>
   </div>
 </template>
@@ -84,8 +104,9 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 
 const agents = ref([])
-const mcpConnections = ref([])
+const sessions = ref([])
 const selectedAgentId = ref('')
+const currentSessionId = ref('')
 const inputText = ref('')
 const messages = ref([])
 const loading = ref(false)
@@ -93,11 +114,12 @@ const streamingText = ref('')
 const abortController = ref(null)
 const messagesRef = ref(null)
 
+const mcpConnections = ref([])
+
 const resolvedTools = computed(() => {
   const agent = selectedAgent.value
   if (!agent) return []
   const names = new Set(agent.tools || [])
-  // Show MCP connection names as-is (not expanded into individual tools)
   for (const connName of (agent.connections || [])) {
     names.add(`🔗 ${connName}`)
   }
@@ -107,11 +129,13 @@ const resolvedTools = computed(() => {
 const selectedAgent = computed(() =>
   agents.value.find(a => a.id === selectedAgentId.value)
 )
-const sessionId = computed(() =>
-  selectedAgentId.value ? `agent-${selectedAgentId.value}` : ''
+
+const inputPlaceholder = computed(() =>
+  selectedAgentId.value ? '输入消息...' : '请先选择一个 Agent'
 )
 
 onMounted(fetchAgents)
+
 async function fetchAgents() {
   try {
     const [agentsRes, mcpRes] = await Promise.all([
@@ -123,24 +147,75 @@ async function fetchAgents() {
   } catch { agents.value = []; mcpConnections.value = [] }
 }
 
-async function newChat() {
-  if (loading.value) return
-  if (sessionId.value) {
-    try {
-      await fetch('/api/v1/agent/session/clear', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId.value }),
-      })
-    } catch { /* ignore */ }
+async function fetchSessions() {
+  if (!selectedAgentId.value) {
+    sessions.value = []
+    return
   }
+  try {
+    const res = await fetch(`/api/v1/agent/${selectedAgentId.value}/sessions`)
+    const data = await res.json()
+    sessions.value = data.sessions || []
+  } catch { sessions.value = [] }
+}
+
+function onAgentChange() {
+  currentSessionId.value = ''
   messages.value = []
   streamingText.value = ''
+  fetchSessions()
+}
+
+function formatTime(ts) {
+  if (!ts) return ''
+  const d = new Date(ts * 1000)
+  const now = new Date()
+  const isToday = d.toDateString() === now.toDateString()
+  if (isToday) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+}
+
+async function newChat() {
+  if (loading.value || !selectedAgentId.value) return
+  try {
+    const res = await fetch(`/api/v1/agent/${selectedAgentId.value}/sessions`, { method: 'POST' })
+    const data = await res.json()
+    currentSessionId.value = data.session_id
+    messages.value = []
+    streamingText.value = ''
+    await fetchSessions()
+    scrollToBottom()
+  } catch { /* ignore */ }
+}
+
+async function switchSession(session) {
+  if (loading.value) return
+  currentSessionId.value = session.session_id
+  messages.value = []
+  streamingText.value = ''
+
+  try {
+    const res = await fetch(`/api/v1/agent/session/messages/${session.session_id}`)
+    const data = await res.json()
+    messages.value = data.messages || []
+    nextTick(scrollToBottom)
+  } catch { /* ignore */ }
+}
+
+async function deleteSession(session) {
+  if (!confirm(`删除会话「${session.name}」？`)) return
+  try {
+    await fetch(`/api/v1/agent/session/${session.session_id}`, { method: 'DELETE' })
+    if (currentSessionId.value === session.session_id) {
+      currentSessionId.value = ''
+      messages.value = []
+    }
+    await fetchSessions()
+  } catch { /* ignore */ }
 }
 
 function renderContent(text) {
   if (!text) return ''
-  // Simple markdown-like rendering
   return text
     .replace(/### (.+)/g, '<h3>$1</h3>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -151,85 +226,78 @@ async function sendMessage() {
   const msg = inputText.value.trim()
   if (!msg || loading.value || !selectedAgentId.value) return
 
-  // If already loading, abort
+  // Auto-create session if none exists
+  if (!currentSessionId.value) {
+    try {
+      const res = await fetch(`/api/v1/agent/${selectedAgentId.value}/sessions`, { method: 'POST' })
+      const data = await res.json()
+      currentSessionId.value = data.session_id
+      await fetchSessions()
+    } catch { return }
+  }
+
   if (loading.value && abortController.value) {
     abortController.value.abort()
     loading.value = false
     return
   }
 
-  // Add user message
   messages.value.push({ role: 'user', content: msg })
   inputText.value = ''
   scrollToBottom()
 
-  // Start loading agent response
   loading.value = true
   streamingText.value = ''
   abortController.value = new AbortController()
 
   const msgIndex = messages.value.length
-  messages.value.push({
-    role: 'agent',
-    content: '',
-    thinking: [],
-    tool_calls: [],
-    tool_results: [],
-  })
+  messages.value.push({ role: 'agent', content: '', thinking: [], tool_calls: [], tool_results: [] })
 
   try {
     const res = await fetch(`/api/v1/agent/stream/${selectedAgentId.value}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg, session_id: sessionId.value }),
+      body: JSON.stringify({ message: msg, session_id: currentSessionId.value }),
       signal: abortController.value.signal,
     })
 
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+    let currentEvent = ''
 
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
+      const parts = buffer.split('\n')
+      buffer = parts.pop() || ''
 
-      for (const line of lines) {
+      for (const line of parts) {
         if (line.startsWith('event: ')) {
-          const eventType = line.slice(7).trim()
-          // Next line is data
-          continue
-        }
-        if (line.startsWith('data: ')) {
+          currentEvent = line.slice(7).trim()
+        } else if (line.startsWith('data: ')) {
           try {
             const data = JSON.parse(line.slice(6))
-            const content = data.content || ''
-
-            // Update the last agent message
             const last = messages.value[msgIndex]
 
-            // Check if event type was tool_call or tool_result from previous line
-            // Since we have data but not event, infer from content
-            if (content.startsWith('Calling tool:')) {
-              if (!last.thinking.includes(content)) {
-                last.thinking.push(content)
-              }
-            } else if (content && !last.content) {
-              // This is the final output
-              streamingText.value = content
-              last.content = content
-            } else if (content) {
-              streamingText.value = content
-              last.content = content
+            if (currentEvent === 'tool_call') {
+              if (!last.thinking.includes(data.content)) last.thinking.push(data.content)
+            } else if (currentEvent === 'tool_result') {
+              if (!last.tool_results.includes(data.content)) last.tool_results.push(data.content)
+            } else if (currentEvent === 'chunk' || currentEvent === 'end') {
+              streamingText.value = data.content
+              last.content = data.content
             }
           } catch { /* ignore parse errors */ }
         }
       }
       scrollToBottom()
     }
+
+    // Refresh session list (name may have been auto-updated)
+    await fetchSessions()
   } catch (err) {
     if (err.name !== 'AbortError') {
       messages.value[msgIndex].content = `Error: ${err.message}`
@@ -252,35 +320,130 @@ function scrollToBottom() {
 </script>
 
 <style scoped>
-.chat-toolbar {
+.chat-layout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 100px);
+}
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  flex-shrink: 0;
+}
+
+.chat-body {
+  display: flex;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Session Sidebar ── */
+.session-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.session-sidebar-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+}
+
+.session-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.session-item {
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 0.25rem;
+  position: relative;
+  transition: background 0.15s;
+}
+.session-item:hover { background: #f5f5f5; }
+.session-item.active { background: #e3f2fd; }
+
+.session-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 1.2rem;
+}
+.session-meta {
+  font-size: 0.72rem;
+  color: #999;
+  margin-top: 0.15rem;
+}
+.session-del {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
+  justify-content: center;
 }
-.chat-tools-label {
-  font-size: 0.85rem;
-  color: #666;
-}
-.tool-tag {
-  display: inline-block;
-  background: #e8f5e9;
-  color: #2e7d32;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+.session-del:hover { background: #ffebee; color: #e53935; }
+
+.session-empty {
+  text-align: center;
+  color: #999;
   font-size: 0.8rem;
-  margin: 0 0.2rem;
+  padding: 2rem 0;
+}
+
+.session-sidebar-footer {
+  padding: 0.75rem;
+  border-top: 1px solid #eee;
+  flex-shrink: 0;
+}
+.agent-select { font-size: 0.8rem; }
+.agent-tools {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+/* ── Chat Main ── */
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .chat-messages {
-  height: calc(100vh - 320px);
-  min-height: 300px;
+  flex: 1;
   overflow-y: auto;
   background: white;
   border-radius: 8px;
   padding: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 .chat-empty {
@@ -294,9 +457,7 @@ function scrollToBottom() {
   gap: 0.75rem;
   margin-bottom: 1rem;
 }
-.chat-msg-user {
-  flex-direction: row-reverse;
-}
+.chat-msg-user { flex-direction: row-reverse; }
 .chat-avatar {
   width: 36px;
   height: 36px;
@@ -316,17 +477,9 @@ function scrollToBottom() {
   line-height: 1.6;
   font-size: 0.9rem;
 }
-.chat-msg-user .chat-bubble {
-  background: #1a1a2e;
-  color: white;
-}
-.chat-content {
-  word-break: break-word;
-}
-.chat-content :deep(h3) {
-  font-size: 1rem;
-  margin: 0.5rem 0 0.25rem;
-}
+.chat-msg-user .chat-bubble { background: #1a1a2e; color: white; }
+.chat-content { word-break: break-word; }
+.chat-content :deep(h3) { font-size: 1rem; margin: 0.5rem 0 0.25rem; }
 
 .chat-thinking {
   display: flex;
@@ -336,11 +489,7 @@ function scrollToBottom() {
   padding-bottom: 0.5rem;
   border-bottom: 1px dashed #ddd;
 }
-.thinking-step {
-  font-size: 0.8rem;
-  color: #666;
-  font-style: italic;
-}
+.thinking-step { font-size: 0.8rem; color: #666; font-style: italic; }
 
 .chat-tools, .chat-tool-results {
   margin-top: 0.5rem;
@@ -354,13 +503,18 @@ function scrollToBottom() {
   font-family: monospace;
 }
 .chat-msg-user .tool-call,
-.chat-msg-user .tool-result {
-  color: #ccc;
+.chat-msg-user .tool-result { color: #ccc; }
+
+.tool-tag {
+  display: inline-block;
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
 }
 
-.chat-typing {
-  color: #666;
-}
+.chat-typing { color: #666; }
 .typing-dots span {
   animation: blink 1.4s infinite;
   font-size: 1.5rem;
@@ -377,6 +531,7 @@ function scrollToBottom() {
   display: flex;
   gap: 0.5rem;
   align-items: flex-end;
+  flex-shrink: 0;
 }
 .chat-input {
   flex: 1;

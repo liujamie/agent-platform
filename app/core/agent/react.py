@@ -58,7 +58,17 @@ class ReActAgent(BaseAgent):
     async def _save_to_history(self, session_id: str, user_input: str, llm_output: str) -> None:
         """Save user message + assistant response to Redis session history."""
         try:
-            from app.infrastructure.redis_client import session_add_message
+            from app.infrastructure.redis_client import session_add_message, session_get_messages, session_rename, redis_client
+
+            # On first message, auto-name the session
+            existing = await session_get_messages(session_id)
+            if not existing and redis_client:
+                # Use first ~30 chars of user input as session name
+                name = user_input.strip()[:30]
+                if len(user_input.strip()) > 30:
+                    name += "..."
+                await session_rename(session_id, name)
+
             await session_add_message(session_id, {
                 "role": "user",
                 "content": user_input,

@@ -53,6 +53,10 @@ class SessionClearRequest(BaseModel):
     session_id: str
 
 
+class SessionRenameRequest(BaseModel):
+    name: str
+
+
 class AgentRunResponse(BaseModel):
     status: str
     output: str = ""
@@ -212,3 +216,45 @@ async def session_clear(req: SessionClearRequest):
         return {"message": f"Session '{req.session_id}' cleared"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Multi-session management ────────────────────────
+
+@router.get("/{agent_id}/sessions")
+async def list_sessions(agent_id: int):
+    """List all sessions for an agent."""
+    from app.infrastructure.redis_client import session_list
+    sessions = await session_list(agent_id)
+    return {"sessions": sessions}
+
+
+@router.post("/{agent_id}/sessions")
+async def create_session(agent_id: int):
+    """Create a new session for an agent."""
+    from app.infrastructure.redis_client import session_create
+    session_id = await session_create(agent_id)
+    return {"session_id": session_id, "name": "新对话"}
+
+
+@router.delete("/session/{session_id}")
+async def delete_session(session_id: str):
+    """Delete a session and all its messages."""
+    from app.infrastructure.redis_client import session_delete
+    await session_delete(session_id)
+    return {"message": f"Session '{session_id}' deleted"}
+
+
+@router.put("/session/{session_id}/rename")
+async def rename_session(session_id: str, req: SessionRenameRequest):
+    """Rename a session."""
+    from app.infrastructure.redis_client import session_rename
+    await session_rename(session_id, req.name)
+    return {"message": "Renamed"}
+
+
+@router.get("/session/messages/{session_id}")
+async def get_session_messages(session_id: str):
+    """Get all messages for a session."""
+    from app.infrastructure.redis_client import session_get_messages
+    messages = await session_get_messages(session_id)
+    return {"messages": messages}
