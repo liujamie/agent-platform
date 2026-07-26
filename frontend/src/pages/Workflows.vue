@@ -45,7 +45,7 @@
     <div v-if="showRunModal" class="modal-overlay" @click.self="showRunModal = false">
       <div class="modal" style="max-width:500px">
         <h2 style="font-size:0.95rem;margin-bottom:0.5rem">运行 Workflow</h2>
-        <p style="font-size:0.78rem;color:#666;margin-bottom:0.75rem">输入参数（JSON 格式，节点中通过 {{ input.xxx }} 引用）</p>
+        <p style="font-size:0.78rem;color:#666;margin-bottom:0.75rem">输入参数（JSON 格式，节点中通过 input.xxx 引用）</p>
         <textarea v-model="runInputJson" class="form-textarea" rows="8" style="font-family:monospace;font-size:0.78rem" placeholder='{"code_diff": "diff --git a/src/main.py b/src/main.py\n+ print(1/0)"}'></textarea>
         <div style="display:flex;gap:0.4rem;justify-content:flex-end;margin-top:0.75rem">
           <button @click="showRunModal = false" class="btn btn-outline btn-sm">取消</button>
