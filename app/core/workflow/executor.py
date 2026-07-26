@@ -236,7 +236,29 @@ class WorkflowExecutor:
         model_client = model_router.current_client if model_router else None
         agent = ReActAgent(agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway, agent_id=agent_id)
         result = await agent.execute(formatted, session_id=session_id)
-        return result.output
+
+        raw_output = result.output or ""
+
+        # Extract JSON from response for downstream condition/transform nodes
+        import json as _json
+        import re as _re
+        parsed = {"text": raw_output}
+        json_match = _re.search(r"\{[^{}]*\"critical\"[^{}]*\}", raw_output, _re.DOTALL)
+        if not json_match:
+            json_match = _re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_output, _re.DOTALL)
+            if json_match:
+                json_match = _re.search(r"\{.*\}", json_match.group(1), _re.DOTALL)
+        if not json_match:
+            json_match = _re.search(r"\{.*?(?:critical|warning|files).*?\}", raw_output, _re.DOTALL)
+        if json_match:
+            try:
+                data = _json.loads(json_match.group(0))
+                if isinstance(data, dict):
+                    parsed.update(data)
+            except Exception:
+                pass
+
+        return parsed
 
     async def _exec_llm(self, config: dict, node_input: dict) -> str:
         """Direct LLM call without tool loop."""
