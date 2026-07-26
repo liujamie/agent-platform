@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS `conversation_messages` (
   `id`              INT           NOT NULL AUTO_INCREMENT,
   `conversation_id` INT           NOT NULL COMMENT '关联 conversations.id',
   `role`            VARCHAR(20)   NOT NULL COMMENT 'user / assistant / tool / system',
-  `content`         TEXT          NOT NULL COMMENT '消息内容',
+  `content`         LONGTEXT      NOT NULL COMMENT '消息内容',
   `tokens`          INT           DEFAULT 0 COMMENT '预估 token 数',
   `msg_index`       INT           NOT NULL COMMENT '消息序号（从 0 开始）',
   `created_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP,
