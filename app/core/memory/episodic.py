@@ -38,7 +38,7 @@ async def extract_and_save(
 
 
 async def retrieve(agent_id: int, limit: int = 5) -> list[dict[str, Any]]:
-    """Retrieve recent important episodes for an agent."""
+    """Retrieve important episodes for an agent, highest importance first."""
     from app.main import get_db_session
     from sqlalchemy import select
 
@@ -50,7 +50,7 @@ async def retrieve(agent_id: int, limit: int = 5) -> list[dict[str, Any]]:
         from app.infrastructure.models.memory_episode import MemoryEpisode
         result = await db.execute(
             select(MemoryEpisode)
-            .where(MemoryEpisode.agent_id == agent_id)
+            .where(MemoryEpisode.agent_id == agent_id, MemoryEpisode.importance >= 2)
             .order_by(MemoryEpisode.importance.desc(), MemoryEpisode.created_at.desc())
             .limit(limit)
         )
@@ -76,15 +76,18 @@ async def _extract_facts(
     output_excerpt = llm_output[:1500]
 
     prompt = (
-        "从以下对话中提取重要信息，包括：\n"
-        "1. 用户透露的事实或背景信息（type: fact）\n"
-        "2. 用户的偏好或习惯（type: preference）\n"
-        "3. 做出的决策或结论（type: decision）\n\n"
-        "只提取明确、有价值的信息，忽略客套话和通用问候。\n"
-        "每条信息控制在 30 字以内。\n"
-        "按 JSON 数组返回：[{\"content\": \"...\", \"type\": \"fact\", \"importance\": 3}]\n"
-        "importance 1-5，5 为最重要。\n"
-        "如果没有值得记录的信息，返回 []。\n\n"
+        "从以下对话中提取**跨会话有价值**的信息。\n\n"
+        "### 提取（每一项控制在 20 字以内）\n"
+        "- fact: 用户的背景、技术栈、项目信息等事实\n"
+        "- preference: 用户明确表达的偏好或习惯\n"
+        "- decision: 用户做出的技术或业务决策\n\n"
+        "### 跳过\n"
+        "- 打招呼、感谢、客套话\n"
+        "- 当前问题的中间推理过程\n"
+        "- 通用知识或常识\n"
+        "- 一次性问题（不需要记住的信息）\n\n"
+        "按 JSON 数组返回：[{\"content\":\"...\",\"type\":\"fact\",\"importance\":3}]\n"
+        "importance 1-5，5 为最重要。无有价值信息返回 []。\n\n"
         f"用户：{user_excerpt}\n\n"
         f"助手：{output_excerpt}"
     )
@@ -124,8 +127,11 @@ async def _save_episode(
     fact_type: str = "fact",
     importance: int = 1,
 ) -> None:
-    """Save a single episode to MySQL."""
+    """Save a single episode to MySQL.
+    Dedup: if similar content exists for the same agent, boost importance instead of inserting.
+    """
     from app.main import get_db_session
+    from sqlalchemy import select
 
     db = get_db_session()
     if db is None:
@@ -133,6 +139,31 @@ async def _save_episode(
 
     try:
         from app.infrastructure.models.memory_episode import MemoryEpisode
+
+        content = content.strip()
+        if not content:
+            return
+
+        # ── Dedup: check for similar existing episodes ──
+        result = await db.execute(
+            select(MemoryEpisode)
+            .where(MemoryEpisode.agent_id == agent_id)
+            .order_by(MemoryEpisode.created_at.desc())
+            .limit(20)
+        )
+        existing = result.scalars().all()
+
+        for ep in existing:
+            similarity = _text_similarity(content, ep.content)
+            if similarity >= 0.5:
+                # Boost existing importance (capped at 5)
+                new_importance = min(ep.importance + 1, 5)
+                ep.importance = new_importance
+                ep.type = fact_type  # Update type to latest
+                await db.commit()
+                return  # Don't insert duplicate
+
+        # ── No duplicate found, insert new ──
         episode = MemoryEpisode(
             agent_id=agent_id,
             session_id=session_id,
@@ -145,3 +176,16 @@ async def _save_episode(
         await db.commit()
     except Exception:
         await db.rollback()
+
+
+def _text_similarity(a: str, b: str) -> float:
+    """Simple character-level overlap similarity (0.0 - 1.0).
+    No vector DB needed - works well for short fact-like text (~30 chars).
+    """
+    if not a or not b:
+        return 0.0
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    if len(shorter) < 3:
+        return 0.0
+    matches = sum(1 for c in shorter if c in longer)
+    return matches / len(shorter)
