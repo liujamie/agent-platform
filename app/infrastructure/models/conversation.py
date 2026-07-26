@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from sqlalchemy import Column, DateTime, Integer, Text, String
-from sqlalchemy.dialects.mysql import LONGTEXT
 
 from app.infrastructure.database import Base
 
@@ -25,7 +24,7 @@ class ConversationMessage(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     conversation_id = Column(Integer, nullable=False, comment="关联 conversations.id")
     role = Column(String(20), nullable=False, comment="user / assistant / tool / system")
-    content = Column(Text().with_variant(mysql.LONGTEXT, "mysql"), nullable=False, comment="消息内容")
+    content = Column(Text, nullable=False, comment="消息内容。超长文本后续可存入 OSS，此字段存路径")
     tokens = Column(Integer, default=0, comment="预估 token 数")
     msg_index = Column(Integer, nullable=False, comment="消息序号（从 0 开始）")
     created_at = Column(DateTime, default=datetime.now)
