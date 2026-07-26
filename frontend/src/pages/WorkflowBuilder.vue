@@ -4,6 +4,7 @@
       <h1 class="page-title" style="margin-bottom:0">{{ isEdit ? '编辑 Workflow' : '创建 Workflow' }}</h1>
       <div style="display:flex;gap:0.4rem">
         <button @click="showJson = !showJson" class="btn btn-outline">{{ showJson ? '返回画布' : 'JSON 编辑' }}</button>
+        <span v-if="savedMsg" style="font-size:0.78rem;color:#2e7d32">{{ savedMsg }}</span>
         <button @click="saveWorkflow" class="btn btn-primary" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
         <router-link to="/workflows" class="btn btn-outline">返回</router-link>
       </div>
@@ -229,6 +230,7 @@ const edges = ref([])
 const showJson = ref(false)
 const jsonText = ref('')
 const jsonError = ref('')
+const savedMsg = ref('')
 
 let nodeIdCounter = 1
 let dragNodeIdx = null
@@ -479,7 +481,12 @@ async function saveWorkflow() {
     })
     const data = await res.json()
     if (data.id || data.name) {
-      router.push('/workflows')
+      // Stay on page, update edit mode if creating new
+      if (!isEdit.value && data.id) {
+        router.replace(`/workflows/${data.id}/edit`)
+      }
+      savedMsg.value = '✅ 已保存'
+      setTimeout(() => { savedMsg.value = '' }, 2000)
     } else {
       alert('保存失败: ' + (data.detail || 'Unknown'))
     }
