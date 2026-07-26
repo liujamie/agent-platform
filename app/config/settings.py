@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # Encryption key for model API keys stored in DB
     model_config_key: str = ""
 
+    # Embedding (SiliconFlow)
+    siliconflow_api_key: str = ""
+    embedding_model: str = "BAAI/bge-large-zh-v1.5"
+
     # Redis
     redis_host: str = "localhost"
     redis_port: int = 6379

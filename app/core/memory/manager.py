@@ -55,11 +55,12 @@ async def build_context(
     max_tokens: int = 4096,
     model_client=None,
     agent_id: int | None = None,
+    query: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Build an optimized context from full conversation history.
 
-    0. Retrieve episodic memories (if agent_id provided) → inject as sys msg.
+    0. Retrieve episodic memories + semantic search → inject as sys msg.
     1. Truncate any single message exceeding max_tokens * 0.5.
     2. If all messages fit → return as-is.
     3. If not → keep recent messages, compress the rest into a summary
@@ -67,19 +68,31 @@ async def build_context(
     4. If no model_client available for summarization → just keep
        the last N messages that fit.
     """
-    # ── Level 0: episodic memory injection (always retrieve, even without history) ──
-    episodes = []
+    # ── Level 0: memory injection (always retrieve, even without history) ──
+    memory_lines = []
+
     if agent_id is not None:
+        # 0a: Episodic — recent important facts
         from app.core.memory.episodic import retrieve as retrieve_episodes
         episodes = await retrieve_episodes(agent_id, limit=3)
+        for e in episodes:
+            memory_lines.append(f"- [{e['type']}] {e['content']}")
 
-    # Build episode system message if we have any
+        # 0b: Semantic — query-relevant facts (if user provided a query)
+        if query:
+            try:
+                from app.core.memory.semantic import search_memories
+                semantic_hits = await search_memories(agent_id, query, top_k=3, min_score=0.7)
+                for hit in semantic_hits:
+                    memory_lines.append(f"- 🔍 {hit['content']}")
+            except Exception:
+                pass
+
     episode_msg = None
-    if episodes:
-        ep_text = "\n".join(f"- [{e['type']}] {e['content']}" for e in episodes)
+    if memory_lines:
         episode_msg = {
             "role": "system",
-            "content": f"## 关于用户的历史记忆\n\n{ep_text}",
+            "content": "## 关于用户的历史记忆\n\n" + "\n".join(memory_lines),
         }
 
     if not history:

@@ -151,6 +151,7 @@ class ReActAgent(BaseAgent):
                 max_tokens=self.config.max_tokens * 2,
                 model_client=self.model_client,
                 agent_id=self._agent_id,
+                query=task_input,
             )
             messages.extend(history)
         messages.append({"role": "user", "content": task_input})
@@ -242,6 +243,7 @@ class ReActAgent(BaseAgent):
                 max_tokens=self.config.max_tokens * 2,
                 model_client=self.model_client,
                 agent_id=self._agent_id,
+                query=task_input,
             )
             messages.extend(history)
         messages.append({"role": "user", "content": task_input})

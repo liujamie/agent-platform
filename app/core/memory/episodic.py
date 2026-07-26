@@ -28,13 +28,29 @@ async def extract_and_save(
         return
 
     for fact in facts:
+        content = fact.get("content", "")
+        fact_type = fact.get("type", "fact")
+        importance = fact.get("importance", 1)
+        # Save to episodic memory (structured retrieval)
         await _save_episode(
             agent_id=agent_id,
             session_id=session_id,
-            content=fact.get("content", ""),
-            fact_type=fact.get("type", "fact"),
-            importance=fact.get("importance", 1),
+            content=content,
+            fact_type=fact_type,
+            importance=importance,
         )
+        # Save to semantic memory (vector retrieval) — non-blocking
+        try:
+            from app.core.memory.semantic import save_memory
+            await save_memory(
+                agent_id=agent_id,
+                session_id=session_id,
+                content=content,
+                fact_type=fact_type,
+                importance=importance,
+            )
+        except Exception:
+            pass
 
 
 async def retrieve(agent_id: int, limit: int = 5) -> list[dict[str, Any]]:

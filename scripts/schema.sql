@@ -163,3 +163,19 @@ CREATE TABLE IF NOT EXISTS `memory_episodes` (
   INDEX `idx_mem_agent` (`agent_id`),
   INDEX `idx_mem_type` (`agent_id`, `type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 语义记忆表（Semantic Memory — 向量检索）
+-- ============================================
+CREATE TABLE IF NOT EXISTS `semantic_memories` (
+  `id`              INT           NOT NULL AUTO_INCREMENT,
+  `agent_id`        INT           NOT NULL COMMENT '所属 Agent',
+  `session_id`      VARCHAR(100)  DEFAULT NULL COMMENT '来源会话',
+  `content`         TEXT          NOT NULL COMMENT '原始文本',
+  `embedding`       BLOB          DEFAULT NULL COMMENT '向量（float32）',
+  `type`            VARCHAR(20)   DEFAULT 'fact' COMMENT 'fact / preference / decision',
+  `importance`      INT           DEFAULT 1 COMMENT '重要性 1-5',
+  `created_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_smem_agent` (`agent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
