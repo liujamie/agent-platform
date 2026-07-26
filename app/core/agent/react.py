@@ -47,37 +47,30 @@ class ReActAgent(BaseAgent):
         })
 
     async def _load_history(self, session_id: str) -> list[dict]:
-        """Load session history from Redis."""
+        """Load full conversation history from MySQL via ConversationService."""
+        from app.core.conversation.service import get_messages
         try:
-            from app.infrastructure.redis_client import session_get_messages
-            msgs = await session_get_messages(session_id)
-            return msgs if msgs else []
+            return await get_messages(session_id)
         except Exception:
             return []
 
     async def _save_to_history(self, session_id: str, user_input: str, llm_output: str) -> None:
-        """Save user message + assistant response to Redis session history."""
-        try:
-            from app.infrastructure.redis_client import session_add_message, session_get_messages, session_rename, redis_client
+        """Save user + assistant messages to MySQL via ConversationService.
+        Auto-names the session from the first user message.
+        """
+        from app.core.conversation.service import add_message, get_message_count, rename
 
-            # On first message, auto-name the session
-            existing = await session_get_messages(session_id)
-            if not existing and redis_client:
-                # Use first ~30 chars of user input as session name
+        try:
+            is_first = await get_message_count(session_id) == 0
+            if is_first:
                 name = user_input.strip()[:30]
                 if len(user_input.strip()) > 30:
                     name += "..."
-                await session_rename(session_id, name)
+                await rename(session_id, name)
 
-            await session_add_message(session_id, {
-                "role": "user",
-                "content": user_input,
-            })
+            await add_message(session_id, "user", user_input)
             if llm_output:
-                await session_add_message(session_id, {
-                    "role": "assistant",
-                    "content": llm_output,
-                })
+                await add_message(session_id, "assistant", llm_output)
         except Exception:
             pass
 
@@ -151,6 +144,8 @@ class ReActAgent(BaseAgent):
         messages = [self._build_system_message()]
         if session_id:
             history = await self._load_history(session_id)
+            from app.core.memory.manager import build_context
+            history = await build_context(history, max_tokens=self.config.max_tokens * 2, model_client=self.model_client)
             messages.extend(history)
         messages.append({"role": "user", "content": task_input})
         tool_schemas = self._get_tool_schemas()
@@ -227,6 +222,8 @@ class ReActAgent(BaseAgent):
         messages = [self._build_system_message()]
         if session_id:
             history = await self._load_history(session_id)
+            from app.core.memory.manager import build_context
+            history = await build_context(history, max_tokens=self.config.max_tokens * 2, model_client=self.model_client)
             messages.extend(history)
         messages.append({"role": "user", "content": task_input})
         tool_schemas = self._get_tool_schemas()

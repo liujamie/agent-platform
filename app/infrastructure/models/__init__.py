@@ -4,6 +4,17 @@ from app.infrastructure.models.run_log import RunLog
 from app.infrastructure.models.model_config import ModelConfig
 from app.infrastructure.models.mcp_connection import MCPConnection
 from app.infrastructure.models.skill_definition import SkillDefinition
+from app.infrastructure.models.conversation import Conversation, ConversationMessage
 from app.infrastructure.database import Base
 
-__all__ = ["Base", "AgentDefinition", "WorkflowDefinition", "RunLog", "ModelConfig", "MCPConnection", "SkillDefinition"]
+__all__ = [
+    "Base",
+    "AgentDefinition",
+    "WorkflowDefinition",
+    "RunLog",
+    "ModelConfig",
+    "MCPConnection",
+    "SkillDefinition",
+    "Conversation",
+    "ConversationMessage",
+]

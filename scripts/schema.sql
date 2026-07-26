@@ -115,3 +115,35 @@ CREATE TABLE IF NOT EXISTS `skill_definitions` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_skill_definitions_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 会话记录表（Conversation — 完整消息永久存储）
+-- ============================================
+CREATE TABLE IF NOT EXISTS `conversations` (
+  `id`              INT           NOT NULL AUTO_INCREMENT,
+  `session_id`      VARCHAR(100)  NOT NULL COMMENT '前端传入的会话标识',
+  `agent_id`        INT           NOT NULL COMMENT '所属 Agent ID',
+  `name`            VARCHAR(200)  DEFAULT '新对话' COMMENT '会话名称',
+  `message_count`   INT           DEFAULT 0 COMMENT '消息总数',
+  `status`          VARCHAR(20)   DEFAULT 'active' COMMENT 'active / archived',
+  `created_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_conversations_session` (`session_id`),
+  INDEX `idx_conversations_agent` (`agent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 会话消息表（ConversationMessage — 每条消息一条记录）
+-- ============================================
+CREATE TABLE IF NOT EXISTS `conversation_messages` (
+  `id`              INT           NOT NULL AUTO_INCREMENT,
+  `conversation_id` INT           NOT NULL COMMENT '关联 conversations.id',
+  `role`            VARCHAR(20)   NOT NULL COMMENT 'user / assistant / tool / system',
+  `content`         TEXT          NOT NULL COMMENT '消息内容',
+  `tokens`          INT           DEFAULT 0 COMMENT '预估 token 数',
+  `msg_index`       INT           NOT NULL COMMENT '消息序号（从 0 开始）',
+  `created_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_conv_msg_conv` (`conversation_id`, `msg_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
