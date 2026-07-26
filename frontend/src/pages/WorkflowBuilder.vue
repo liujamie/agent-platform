@@ -3,8 +3,19 @@
     <div class="page-actions">
       <h1 class="page-title" style="margin-bottom:0">{{ isEdit ? '编辑 Workflow' : '创建 Workflow' }}</h1>
       <div style="display:flex;gap:0.4rem">
+        <button @click="showJson = !showJson" class="btn btn-outline">{{ showJson ? '返回画布' : 'JSON 编辑' }}</button>
         <button @click="saveWorkflow" class="btn btn-primary" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
         <router-link to="/workflows" class="btn btn-outline">返回</router-link>
+      </div>
+    </div>
+
+    <!-- JSON Editor (toggle) -->
+    <div v-if="showJson" class="wf-json-editor" style="margin-bottom:0.5rem">
+      <textarea v-model="jsonText" class="form-textarea" rows="18" style="font-family:monospace;font-size:0.78rem" placeholder="粘贴 Workflow JSON 定义..."></textarea>
+      <div style="display:flex;gap:0.3rem;margin-top:0.3rem">
+        <button @click="importJson" class="btn btn-primary btn-sm">导入到画布</button>
+        <button @click="exportJson" class="btn btn-outline btn-sm">从画布导出</button>
+        <span v-if="jsonError" style="color:#c62828;font-size:0.75rem;margin-left:0.5rem">{{ jsonError }}</span>
       </div>
     </div>
 
@@ -215,6 +226,9 @@ const wfName = ref('')
 const wfDesc = ref('')
 const nodes = ref([])
 const edges = ref([])
+const showJson = ref(false)
+const jsonText = ref('')
+const jsonError = ref('')
 
 let nodeIdCounter = 1
 let dragNodeIdx = null
@@ -422,6 +436,26 @@ function fromWorkflowDef(def) {
     condition: e.condition || '',
   }))
   nodeIdCounter = nodes.value.length + 1
+}
+
+function importJson() {
+  jsonError.value = ''
+  try {
+    const def = JSON.parse(jsonText.value)
+    if (!def.nodes || !def.edges) {
+      jsonError.value = '缺少 nodes 或 edges 字段'
+      return
+    }
+    fromWorkflowDef(def)
+    showJson.value = false
+    jsonText.value = ''
+  } catch (e) {
+    jsonError.value = 'JSON 解析失败: ' + e.message
+  }
+}
+
+function exportJson() {
+  jsonText.value = JSON.stringify(toWorkflowDef(), null, 2)
 }
 
 async function saveWorkflow() {
