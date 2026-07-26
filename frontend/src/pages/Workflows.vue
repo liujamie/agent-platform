@@ -9,56 +9,117 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th>ID</th>
           <th>名称</th>
           <th>节点数</th>
           <th>状态</th>
           <th>创建时间</th>
+          <th>最近运行</th>
           <th>操作</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="wf in workflows" :key="wf.id">
-          <td>{{ wf.id }}</td>
-          <td><strong>{{ wf.name }}</strong></td>
-          <td>{{ wf.definition?.nodes?.length || 0 }}</td>
+          <td><strong>{{ wf.name }}</strong><br><span style="color:#999;font-size:0.7rem">{{ wf.description || '' }}</span></td>
+          <td>{{ wf.definition?.nodes?.length || 0 }} 节点</td>
           <td><span :class="['badge', wf.status === 'active' ? 'badge-active' : 'badge-archived']">{{ wf.status }}</span></td>
-          <td style="color: #999; font-size: 0.85rem">{{ formatDate(wf.created_at) }}</td>
+          <td style="color:#999;font-size:0.8rem">{{ formatDate(wf.created_at) }}</td>
+          <td>
+            <span v-if="wf.last_run" style="font-size:0.8rem">
+              <span :class="['badge', wf.last_run.status === 'success' ? 'badge-success' : 'badge-error']">{{ wf.last_run.status }}</span>
+              {{ formatTime(wf.last_run.started_at) }}
+            </span>
+            <span v-else style="color:#999;font-size:0.8rem">-</span>
+          </td>
           <td>
             <router-link :to="`/workflows/${wf.id}/edit`" class="btn btn-outline btn-sm">编辑</router-link>
-            <button @click="runWorkflow(wf)" class="btn btn-primary btn-sm">运行</button>
+            <button @click="runWorkflow(wf.id)" class="btn btn-primary btn-sm">运行</button>
             <button @click="deleteWorkflow(wf.id)" class="btn btn-danger btn-sm">归档</button>
           </td>
         </tr>
       </tbody>
     </table>
-    <p v-if="workflows.length === 0" style="text-align: center; color: #999; padding: 2rem">暂无 Workflow 定义</p>
+    <p v-if="workflows.length === 0" style="text-align:center;color:#999;padding:2rem">暂无 Workflow 定义</p>
+
+    <!-- Run Logs -->
+    <div style="margin-top:1.5rem">
+      <h2 style="font-size:1rem;margin-bottom:0.5rem">运行历史</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Trace ID</th>
+            <th>状态</th>
+            <th>耗时</th>
+            <th>触发方式</th>
+            <th>时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="inst in instances" :key="inst.id">
+            <td><code style="font-size:0.75rem">{{ inst.trace_id?.slice(0,12) }}...</code></td>
+            <td><span :class="['badge', inst.status === 'success' ? 'badge-success' : inst.status === 'running' ? 'badge-active' : 'badge-error']">{{ inst.status }}</span></td>
+            <td style="font-size:0.8rem">{{ inst.duration_ms }}ms</td>
+            <td style="font-size:0.8rem">{{ inst.trigger_type }}</td>
+            <td style="color:#999;font-size:0.8rem">{{ formatTime(inst.started_at) }}</td>
+            <td><router-link :to="`/workflows/runs/${inst.trace_id}`" class="btn btn-outline btn-sm">详情</router-link></td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="instances.length === 0" style="text-align:center;color:#999;padding:1rem;font-size:0.8rem">暂无运行记录</p>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 const workflows = ref([])
+const instances = ref([])
 
-onMounted(fetchWorkflows)
+onMounted(async () => {
+  await fetchWorkflows()
+  await fetchInstances()
+})
+
 async function fetchWorkflows() {
   try {
     const res = await fetch('/api/v1/admin/workflows')
     const data = await res.json()
-    workflows.value = data.workflows || []
+    workflows.value = (data.workflows || []).map(w => ({
+      ...w,
+      last_run: null,
+    }))
+    // Try to fetch last run for each workflow
+    const instRes = await fetch('/api/v1/workflow/instances?page_size=50')
+    const instData = await instRes.json()
+    const runs = instData.instances || []
+    for (const w of workflows.value) {
+      const last = runs.find(r => r.workflow_id === w.id)
+      if (last) w.last_run = last
+    }
   } catch { workflows.value = [] }
 }
 
-async function runWorkflow(wf) {
+async function fetchInstances() {
   try {
-    const res = await fetch('/api/v1/workflow/run', {
+    const res = await fetch('/api/v1/workflow/instances?page_size=10')
+    const data = await res.json()
+    instances.value = data.instances || []
+  } catch { instances.value = [] }
+}
+
+async function runWorkflow(id) {
+  try {
+    const res = await fetch(`/api/v1/workflow/run/${id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(wf.definition),
+      body: JSON.stringify({ workflow_id: id, input_data: {} }),
     })
     const result = await res.json()
-    alert('Workflow 已执行完成\n状态: ' + result.status)
+    alert(`Workflow 已完成\n状态: ${result.status}\n耗时: ${result.duration_ms}ms`)
+    await fetchInstances()
   } catch (e) {
     alert('执行失败: ' + e.message)
   }
@@ -70,8 +131,6 @@ async function deleteWorkflow(id) {
   await fetchWorkflows()
 }
 
-function formatDate(d) {
-  if (!d) return '-'
-  return new Date(d).toLocaleString('zh-CN')
-}
+function formatDate(d) { return d ? new Date(d).toLocaleDateString('zh-CN') : '-' }
+function formatTime(d) { return d ? new Date(d).toLocaleString('zh-CN') : '-' }
 </script>

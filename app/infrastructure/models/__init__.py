@@ -7,12 +7,16 @@ from app.infrastructure.models.skill_definition import SkillDefinition
 from app.infrastructure.models.conversation import Conversation, ConversationMessage
 from app.infrastructure.models.memory_episode import MemoryEpisode
 from app.infrastructure.models.semantic_memory import MemorySemantic
+from app.infrastructure.models.workflow_execution import WorkflowInstance, WorkflowNodeExecution, WorkflowApproval
 from app.infrastructure.database import Base
 
 __all__ = [
     "Base",
     "AgentDefinition",
     "WorkflowDefinition",
+    "WorkflowInstance",
+    "WorkflowNodeExecution",
+    "WorkflowApproval",
     "RunLog",
     "ModelConfig",
     "MCPConnection",

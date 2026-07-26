@@ -21,5 +21,5 @@ Thumbs.db
 # Frontend dependencies
 frontend/node_modules/
 
-# Docs - only ignore local planning files, not design docs
-docs/superpowers/
+# Docs (local planning and design files)
+docs/

@@ -6,6 +6,7 @@ import Agents from './pages/Agents.vue'
 import AgentForm from './pages/AgentForm.vue'
 import Workflows from './pages/Workflows.vue'
 import WorkflowForm from './pages/WorkflowForm.vue'
+import WorkflowRun from './pages/WorkflowRun.vue'
 import Logs from './pages/Logs.vue'
 import Models from './pages/Models.vue'
 import Chat from './pages/Chat.vue'
@@ -28,6 +29,7 @@ const routes = [
   { path: '/tools', component: Tools },
   { path: '/skills', component: Skills },
   { path: '/skills/guide', component: SkillGuide },
+  { path: '/workflows/runs/:trace_id', component: WorkflowRun },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

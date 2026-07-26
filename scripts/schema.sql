@@ -179,3 +179,65 @@ CREATE TABLE IF NOT EXISTS `memory_semantic` (
   PRIMARY KEY (`id`),
   INDEX `idx_smem_agent` (`agent_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 工作流运行实例表
+-- ============================================
+CREATE TABLE IF NOT EXISTS `workflow_instances` (
+  `id`              INT           NOT NULL AUTO_INCREMENT,
+  `workflow_id`     INT           NOT NULL COMMENT '关联 workflow_definitions.id',
+  `trace_id`        VARCHAR(36)   NOT NULL,
+  `status`          VARCHAR(20)   DEFAULT 'running' COMMENT 'running / success / failed / paused',
+  `trigger_type`    VARCHAR(20)   DEFAULT 'manual' COMMENT 'manual / schedule / webhook / agent',
+  `input_data`      JSON          DEFAULT NULL,
+  `output_data`     JSON          DEFAULT NULL,
+  `variables`       JSON          DEFAULT NULL,
+  `started_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  `ended_at`        DATETIME      DEFAULT NULL,
+  `duration_ms`     INT           DEFAULT 0,
+  `created_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_wf_trace` (`trace_id`),
+  INDEX `idx_wf_instance_wf` (`workflow_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 工作流节点执行记录表
+-- ============================================
+CREATE TABLE IF NOT EXISTS `workflow_node_executions` (
+  `id`              INT           NOT NULL AUTO_INCREMENT,
+  `instance_id`     INT           NOT NULL,
+  `node_id`         VARCHAR(100)  NOT NULL,
+  `node_type`       VARCHAR(20)   NOT NULL,
+  `node_name`       VARCHAR(100)  DEFAULT '',
+  `status`          VARCHAR(20)   DEFAULT 'pending' COMMENT 'pending / running / success / failed / skipped',
+  `input_data`      JSON          DEFAULT NULL,
+  `output_data`     JSON          DEFAULT NULL,
+  `error`           TEXT          DEFAULT NULL,
+  `retry_count`     INT           DEFAULT 0,
+  `started_at`      DATETIME      DEFAULT NULL,
+  `ended_at`        DATETIME      DEFAULT NULL,
+  `duration_ms`     INT           DEFAULT 0,
+  `created_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_wf_node_instance` (`instance_id`, `node_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 工作流审批表
+-- ============================================
+CREATE TABLE IF NOT EXISTS `workflow_approvals` (
+  `id`              INT           NOT NULL AUTO_INCREMENT,
+  `instance_id`     INT           NOT NULL,
+  `node_exec_id`    INT           NOT NULL,
+  `node_id`         VARCHAR(100)  NOT NULL,
+  `status`          VARCHAR(20)   DEFAULT 'pending' COMMENT 'pending / approved / rejected',
+  `title`           VARCHAR(200)  NOT NULL,
+  `description`     TEXT          DEFAULT NULL,
+  `assignee`        VARCHAR(100)  DEFAULT 'admin',
+  `comment`         TEXT          DEFAULT NULL,
+  `created_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  `handled_at`      DATETIME      DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  INDEX `idx_wf_approval_instance` (`instance_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
