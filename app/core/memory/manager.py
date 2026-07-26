@@ -54,10 +54,12 @@ async def build_context(
     history: list[dict[str, Any]],
     max_tokens: int = 4096,
     model_client=None,
+    agent_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """
     Build an optimized context from full conversation history.
 
+    0. Retrieve episodic memories (if agent_id provided) → inject as sys msg.
     1. Truncate any single message exceeding max_tokens * 0.5.
     2. If all messages fit → return as-is.
     3. If not → keep recent messages, compress the rest into a summary
@@ -68,8 +70,13 @@ async def build_context(
     if not history:
         return []
 
+    # ── Level 0: episodic memory injection ──
+    episodes = []
+    if agent_id is not None:
+        from app.core.memory.episodic import retrieve as retrieve_episodes
+        episodes = await retrieve_episodes(agent_id, limit=3)
+
     # ── Level 1: message-level truncation ──
-    # No single message should dominate the budget
     max_msg_tokens = max_tokens // 2
     truncated_history = []
     for msg in history:
@@ -79,6 +86,14 @@ async def build_context(
             truncated_history.append({**msg, "content": truncated})
         else:
             truncated_history.append(msg)
+
+    # Add episodes as a system message if we have any
+    if episodes:
+        ep_text = "\n".join(f"- [{e['type']}] {e['content']}" for e in episodes)
+        truncated_history.insert(0, {
+            "role": "system",
+            "content": f"## 关于用户的历史记忆\n\n{ep_text}",
+        })
 
     total = _messages_token_count(truncated_history)
     if total <= max_tokens:
@@ -100,7 +115,6 @@ async def build_context(
     if not compress_candidates:
         return kept
 
-    # Try to summarize the trimmed portion
     summary = await _summarize(compress_candidates, model_client)
     if summary:
         kept.insert(0, {"role": "system", "content": f"## 历史摘要\n\n{summary}"})

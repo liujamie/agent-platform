@@ -73,7 +73,7 @@ async def agent_run(req: AgentRunRequest):
         model_client = model_router.current_client
 
     from app.main import mcp_gateway
-    agent = ReActAgent(req.agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway)
+    agent = ReActAgent(req.agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway, agent_id=None)
     result = await agent.execute(req.message)
     return AgentRunResponse(
         status=result.status,
@@ -113,7 +113,7 @@ async def agent_run_by_id(agent_id: int, req: AgentRunByIdRequest):
 
     model_client = model_router.current_client if model_router else None
     from app.main import mcp_gateway
-    agent = ReActAgent(agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway)
+    agent = ReActAgent(agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway, agent_id=agent_id)
     start = time.time()
     result = await agent.execute(req.message, session_id=req.session_id)
     duration = int((time.time() - start) * 1000)
@@ -135,7 +135,7 @@ async def agent_stream(req: AgentRunRequest):
         model_client = model_router.current_client
 
     from app.main import mcp_gateway
-    agent = ReActAgent(req.agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway)
+    agent = ReActAgent(req.agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway, agent_id=None)
 
     async def event_stream():
         async for event in agent.stream(req.message):
@@ -182,7 +182,7 @@ async def agent_stream_by_id(agent_id: int, req: AgentRunByIdRequest):
 
     model_client = model_router.current_client if model_router else None
     from app.main import mcp_gateway
-    agent = ReActAgent(agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway)
+    agent = ReActAgent(agent_config, model_client=model_client, tool_registry=tool_registry, mcp_gateway=mcp_gateway, agent_id=agent_id)
 
     async def event_stream():
         full_output = ""

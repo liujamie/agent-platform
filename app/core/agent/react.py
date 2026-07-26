@@ -14,11 +14,12 @@ class ReActAgent(BaseAgent):
     Supports tool calling via OpenAI-compatible function_call API.
     """
 
-    def __init__(self, config: AgentConfig, model_client=None, tool_registry=None, mcp_gateway=None):
+    def __init__(self, config: AgentConfig, model_client=None, tool_registry=None, mcp_gateway=None, agent_id: int | None = None):
         super().__init__(config)
         self.model_client = model_client
         self.tool_registry = tool_registry
         self.mcp_gateway = mcp_gateway
+        self._agent_id = agent_id
         self._state_machine = AgentStateMachine()
         self._messages: list[dict] = []
         self._loaded_skills: set[str] = set()  # track which skills have been loaded
@@ -145,7 +146,12 @@ class ReActAgent(BaseAgent):
         if session_id:
             history = await self._load_history(session_id)
             from app.core.memory.manager import build_context
-            history = await build_context(history, max_tokens=self.config.max_tokens * 2, model_client=self.model_client)
+            history = await build_context(
+                history,
+                max_tokens=self.config.max_tokens * 2,
+                model_client=self.model_client,
+                agent_id=self._agent_id,
+            )
             messages.extend(history)
         messages.append({"role": "user", "content": task_input})
         tool_schemas = self._get_tool_schemas()
@@ -196,6 +202,14 @@ class ReActAgent(BaseAgent):
                     self._state_machine.transition(AgentState.FINISHED)
                     if session_id:
                         await self._save_to_history(session_id, task_input, response.content or "")
+                    # Extract episodic memories
+                    if self._agent_id and session_id:
+                        from app.core.memory.episodic import extract_and_save
+                        await extract_and_save(
+                            self._agent_id, session_id,
+                            task_input, response.content or "",
+                            self.model_client,
+                        )
                     return AgentResult(
                         status="success",
                         output=response.content or "",
@@ -223,7 +237,12 @@ class ReActAgent(BaseAgent):
         if session_id:
             history = await self._load_history(session_id)
             from app.core.memory.manager import build_context
-            history = await build_context(history, max_tokens=self.config.max_tokens * 2, model_client=self.model_client)
+            history = await build_context(
+                history,
+                max_tokens=self.config.max_tokens * 2,
+                model_client=self.model_client,
+                agent_id=self._agent_id,
+            )
             messages.extend(history)
         messages.append({"role": "user", "content": task_input})
         tool_schemas = self._get_tool_schemas()
@@ -288,6 +307,14 @@ class ReActAgent(BaseAgent):
                     output = response.content or ""
                     if session_id:
                         await self._save_to_history(session_id, task_input, output)
+                    # Extract episodic memories
+                    if self._agent_id and session_id:
+                        from app.core.memory.episodic import extract_and_save
+                        await extract_and_save(
+                            self._agent_id, session_id,
+                            task_input, output,
+                            self.model_client,
+                        )
                     if output:
                         yield AgentEvent(type=AgentEventType.chunk, content=output)
                     yield AgentEvent(type=AgentEventType.end, content=output)

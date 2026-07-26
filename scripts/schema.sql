@@ -147,3 +147,19 @@ CREATE TABLE IF NOT EXISTS `conversation_messages` (
   PRIMARY KEY (`id`),
   INDEX `idx_conv_msg_conv` (`conversation_id`, `msg_index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 情景记忆表（Episodic Memory — 会话关键信息）
+-- ============================================
+CREATE TABLE IF NOT EXISTS `memory_episodes` (
+  `id`              INT           NOT NULL AUTO_INCREMENT,
+  `agent_id`        INT           NOT NULL COMMENT '所属 Agent ID',
+  `session_id`      VARCHAR(100)  DEFAULT NULL COMMENT '来源会话 ID',
+  `content`         TEXT          NOT NULL COMMENT '关键信息摘要',
+  `type`            VARCHAR(20)   DEFAULT 'fact' COMMENT 'fact / preference / decision',
+  `importance`      INT           DEFAULT 1 COMMENT '重要性 1-5',
+  `created_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_mem_agent` (`agent_id`),
+  INDEX `idx_mem_type` (`agent_id`, `type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

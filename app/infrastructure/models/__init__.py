@@ -5,6 +5,7 @@ from app.infrastructure.models.model_config import ModelConfig
 from app.infrastructure.models.mcp_connection import MCPConnection
 from app.infrastructure.models.skill_definition import SkillDefinition
 from app.infrastructure.models.conversation import Conversation, ConversationMessage
+from app.infrastructure.models.memory_episode import MemoryEpisode
 from app.infrastructure.database import Base
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
     "SkillDefinition",
     "Conversation",
     "ConversationMessage",
+    "MemoryEpisode",
 ]
