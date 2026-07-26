@@ -4,6 +4,7 @@ MemoryManager — Agent 工作上下文管理。
 职责：
   从 ConversationService 拿到完整历史后，在 token 预算内
   组装出最优的 LLM 上下文：
+    - 单条超长消息自动截断（保留首尾）
     - 完整保留最近 N 条消息
     - 超出预算时将最早的消息压缩为摘要
     - 摘要本身也作为一条 system 消息参与上下文
@@ -23,6 +24,32 @@ def _messages_token_count(messages: list[dict]) -> int:
     return sum(_estimate_tokens(m.get("content", "") or "") for m in messages)
 
 
+def _truncate_content(content: str, max_tokens: int) -> str:
+    """
+    Truncate a single message's content if it exceeds max_tokens.
+    Strategy: keep head (20%) and tail (80%) with a truncation notice.
+    This preserves both the beginning (context) and end (conclusion).
+    """
+    tokens = _estimate_tokens(content)
+    if tokens <= max_tokens:
+        return content
+
+    chars = len(content)
+    max_chars = max_tokens * _CHARS_PER_TOKEN
+
+    # Keep first ~20% and last ~80% within the budget
+    head_ratio = 0.2
+    head_chars = int(max_chars * head_ratio)
+    tail_chars = max_chars - head_chars - 50  # 50 chars for the notice
+
+    if tail_chars < 50:  # Too small, just take the head
+        return content[:max_chars] + f"\n\n...（内容过长，已截断，共 {tokens} tokens）"
+
+    head = content[:head_chars]
+    tail = content[-tail_chars:]
+    return f"{head}\n\n...（中间内容已截断，共 {tokens} tokens）\n\n{tail}"
+
+
 async def build_context(
     history: list[dict[str, Any]],
     max_tokens: int = 4096,
@@ -31,25 +58,38 @@ async def build_context(
     """
     Build an optimized context from full conversation history.
 
-    1. If history fits within max_tokens → return as-is.
-    2. If not → keep recent messages, compress the rest into a summary
+    1. Truncate any single message exceeding max_tokens * 0.5.
+    2. If all messages fit → return as-is.
+    3. If not → keep recent messages, compress the rest into a summary
        and prepend it as a system message.
-    3. If no model_client available for summarization → just keep
+    4. If no model_client available for summarization → just keep
        the last N messages that fit.
     """
     if not history:
         return []
 
-    total = _messages_token_count(history)
-    if total <= max_tokens:
-        return list(history)
+    # ── Level 1: message-level truncation ──
+    # No single message should dominate the budget
+    max_msg_tokens = max_tokens // 2
+    truncated_history = []
+    for msg in history:
+        content = msg.get("content", "") or ""
+        truncated = _truncate_content(content, max_msg_tokens)
+        if truncated != content:
+            truncated_history.append({**msg, "content": truncated})
+        else:
+            truncated_history.append(msg)
 
-    # Strategy: working backwards, keep as many recent messages as fit
+    total = _messages_token_count(truncated_history)
+    if total <= max_tokens:
+        return truncated_history
+
+    # ── Level 2: context-level sliding window + summary ──
     kept: list[dict] = []
     kept_tokens = 0
     compress_candidates: list[dict] = []
 
-    for msg in reversed(history):
+    for msg in reversed(truncated_history):
         tokens = _estimate_tokens(msg.get("content", "") or "")
         if kept_tokens + tokens <= max_tokens:
             kept.insert(0, msg)
@@ -57,7 +97,6 @@ async def build_context(
         else:
             compress_candidates.insert(0, msg)
 
-    # If all messages fit after trimming (shouldn't happen but safety)
     if not compress_candidates:
         return kept
 
@@ -65,15 +104,12 @@ async def build_context(
     summary = await _summarize(compress_candidates, model_client)
     if summary:
         kept.insert(0, {"role": "system", "content": f"## 历史摘要\n\n{summary}"})
-        # Re-check if still under limit after adding summary
         total_now = _messages_token_count(kept)
         if total_now > max_tokens:
-            # Drop the earliest kept messages until under limit
             while len(kept) > 1 and _messages_token_count(kept) > max_tokens:
-                kept.pop(1)  # Skip index 0 (the summary)
+                kept.pop(1)
         return kept
 
-    # No summary available → just return what fits
     return kept
 
 
@@ -99,7 +135,7 @@ async def _summarize(messages: list[dict], model_client) -> str | None:
     try:
         response = await model_client.invoke(
             messages=[{"role": "user", "content": prompt}],
-            model=None,  # Use current model
+            model=None,
             tools=None,
         )
         summary = (response.content or "").strip()
