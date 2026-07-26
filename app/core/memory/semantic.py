@@ -13,7 +13,7 @@ from openai import AsyncOpenAI
 from sqlalchemy import select
 
 from app.config.settings import get_settings
-from app.infrastructure.models import SemanticMemory as SemanticMemoryModel
+from app.infrastructure.models import MemorySemantic as SemanticMemoryModel
 
 
 # ── Embedding API ────────────────────────────────────

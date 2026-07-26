@@ -6,7 +6,7 @@ from app.infrastructure.models.mcp_connection import MCPConnection
 from app.infrastructure.models.skill_definition import SkillDefinition
 from app.infrastructure.models.conversation import Conversation, ConversationMessage
 from app.infrastructure.models.memory_episode import MemoryEpisode
-from app.infrastructure.models.semantic_memory import SemanticMemory
+from app.infrastructure.models.semantic_memory import MemorySemantic
 from app.infrastructure.database import Base
 
 __all__ = [
@@ -20,5 +20,5 @@ __all__ = [
     "Conversation",
     "ConversationMessage",
     "MemoryEpisode",
-    "SemanticMemory",
+    "MemorySemantic",
 ]

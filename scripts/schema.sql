@@ -167,7 +167,7 @@ CREATE TABLE IF NOT EXISTS `memory_episodes` (
 -- ============================================
 -- 语义记忆表（Semantic Memory — 向量检索）
 -- ============================================
-CREATE TABLE IF NOT EXISTS `semantic_memories` (
+CREATE TABLE IF NOT EXISTS `memory_semantic` (
   `id`              INT           NOT NULL AUTO_INCREMENT,
   `agent_id`        INT           NOT NULL COMMENT '所属 Agent',
   `session_id`      VARCHAR(100)  DEFAULT NULL COMMENT '来源会话',

@@ -5,8 +5,8 @@ from sqlalchemy import Column, DateTime, Integer, Text, BLOB, String
 from app.infrastructure.database import Base
 
 
-class SemanticMemory(Base):
-    __tablename__ = "semantic_memories"
+class MemorySemantic(Base):
+    __tablename__ = "memory_semantic"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     agent_id = Column(Integer, nullable=False, comment="所属 Agent")
