@@ -45,8 +45,9 @@
     <div v-if="showRunModal" class="modal-overlay" @click.self="showRunModal = false">
       <div class="modal" style="max-width:500px">
         <h2 style="font-size:0.95rem;margin-bottom:0.5rem">运行 Workflow</h2>
-        <p style="font-size:0.78rem;color:#666;margin-bottom:0.75rem">输入参数（JSON 格式，节点中通过 input.xxx 引用）</p>
-        <textarea v-model="runInputJson" class="form-textarea" rows="8" style="font-family:monospace;font-size:0.78rem" placeholder='{"code_diff": "diff --git a/src/main.py b/src/main.py\n+ print(1/0)"}'></textarea>
+        <p style="font-size:0.78rem;color:#666;margin-bottom:0.75rem">粘贴代码内容，将作为 <code>input.code_diff</code> 传入 Workflow</p>
+        <textarea v-model="runInputRaw" class="form-textarea" rows="8" style="font-family:monospace;font-size:0.78rem" placeholder="diff --git a/src/main.py b/src/main.py&#10;+ def get_user(id):&#10;+     return db.query(&quot;SELECT * FROM users WHERE id = &quot; + id)"></textarea>
+        <p style="font-size:0.72rem;color:#999;margin-top:0.3rem">内容作为 <code>input.code_diff</code> 传入。如需自定义参数名，改 Workflow 节点里的 <code>input.xxx</code> 即可</p>
         <div style="display:flex;gap:0.4rem;justify-content:flex-end;margin-top:0.75rem">
           <button @click="showRunModal = false" class="btn btn-outline btn-sm">取消</button>
           <button @click="confirmRun" class="btn btn-primary btn-sm" :disabled="runningWf">{{ runningWf ? '运行中...' : '运行' }}</button>
@@ -91,7 +92,7 @@ const router = useRouter()
 const workflows = ref([])
 const instances = ref([])
 const showRunModal = ref(false)
-const runInputJson = ref('')
+const runInputRaw = ref('')
 const runWfId = ref(null)
 const runningWf = ref(false)
 
@@ -129,18 +130,14 @@ async function fetchInstances() {
 
 async function runWorkflow(id) {
   runWfId.value = id
-  runInputJson.value = ''
+  runInputRaw.value = ''
   showRunModal.value = true
 }
 
 async function confirmRun() {
   showRunModal.value = false
   runningWf.value = true
-  let inputData = {}
-  if (runInputJson.value.trim()) {
-    try { inputData = JSON.parse(runInputJson.value) }
-    catch { alert('JSON 格式错误，请检查'); runningWf.value = false; return }
-  }
+  const inputData = { code_diff: runInputRaw.value }
   try {
     const res = await fetch(`/api/v1/workflow/run/${runWfId.value}`, {
       method: 'POST',
