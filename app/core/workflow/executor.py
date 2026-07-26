@@ -107,7 +107,9 @@ class WorkflowExecutor:
                         elif nr:
                             results[nid] = nr
 
-            status = "success"
+            # If any node has error → overall failed
+            has_error = any(r.get("status") in ("error", "failed") for r in results.values())
+            status = "failed" if has_error else "success"
             output = {nid: r.get("output") for nid, r in results.items() if r.get("status") == "success"}
         except Exception as e:
             status = "failed"
