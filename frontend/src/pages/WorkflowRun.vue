@@ -69,7 +69,7 @@
       <!-- DAG Visualization -->
       <div class="card" style="margin-top:1rem">
         <h3 style="font-size:0.85rem;margin-bottom:0.5rem">执行图</h3>
-        <div class="dag-viz" ref="dagRef" style="position:relative;height:300px;background:#fafafa;border-radius:4px;overflow:hidden">
+        <div class="dag-viz" ref="dagRef" style="position:relative;height:300px;background:#fafafa;border-radius:4px;overflow:auto">
           <svg :width="dagSvgW" :height="dagSvgH" style="position:absolute;top:0;left:0">
             <path v-for="(edge, ei) in dagEdges" :key="ei"
               :d="edge.path" stroke="#ccc" stroke-width="2" fill="none"
@@ -89,11 +89,11 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:1rem">
         <div class="card">
           <h3 style="font-size:0.8rem;margin-bottom:0.3rem">输入</h3>
-          <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.5rem;border-radius:4px;max-height:200px;overflow:auto">{{ JSON.stringify(instance.input_data, null, 2) }}</pre>
+          <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.5rem;border-radius:4px;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all">{{ JSON.stringify(instance.input_data, null, 2) }}</pre>
         </div>
         <div class="card">
           <h3 style="font-size:0.8rem;margin-bottom:0.3rem">输出</h3>
-          <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.5rem;border-radius:4px;max-height:200px;overflow:auto">{{ JSON.stringify(instance.output_data, null, 2) }}</pre>
+          <pre style="font-size:0.72rem;background:#f5f5f5;padding:0.5rem;border-radius:4px;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all">{{ JSON.stringify(instance.output_data, null, 2) }}</pre>
         </div>
       </div>
     </div>
