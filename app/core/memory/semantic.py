@@ -110,14 +110,23 @@ async def search_memories(
     min_score: float = 0.7,
 ) -> list[dict[str, Any]]:
     """Search memories by semantic similarity to the query text."""
-    query_vec = await embed_text(query)
-    if query_vec is None:
-        return []
-
     from app.main import get_db_session
 
     db = get_db_session()
     if db is None:
+        return []
+
+    # Quick check: skip embedding API call if no memories exist for this agent
+    try:
+        count_q = select(SemanticMemoryModel.id).where(SemanticMemoryModel.agent_id == agent_id).limit(1)
+        has_memory = (await db.execute(count_q)).first() is not None
+        if not has_memory:
+            return []
+    except Exception:
+        return []
+
+    query_vec = await embed_text(query)
+    if query_vec is None:
         return []
 
     try:
