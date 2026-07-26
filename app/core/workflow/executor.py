@@ -168,7 +168,7 @@ class WorkflowExecutor:
         if node_type == NodeType.tool:
             return await self._exec_tool(config, node_input)
         elif node_type == NodeType.agent:
-            return await self._exec_agent(config, node_input)
+            return await self._exec_agent(config, node_input, ctx)
         elif node_type == NodeType.llm:
             return await self._exec_llm(config, node_input)
         elif node_type == NodeType.condition:
@@ -193,7 +193,7 @@ class WorkflowExecutor:
         result = await self.tool_registry.execute(tool_name, resolved)
         return result.output
 
-    async def _exec_agent(self, config: dict, node_input: dict) -> str:
+    async def _exec_agent(self, config: dict, node_input: dict, ctx: dict) -> str:
         """Execute an Agent via ReActAgent."""
         agent_id = config.get("agent_id")
         prompt = config.get("prompt", "")
@@ -224,10 +224,13 @@ class WorkflowExecutor:
             temperature=(agent_def.temperature or 70) / 100,
         )
 
-        # Format prompt with node_input
+        # Format prompt: replace {{ input.xxx }} with values from node_input or raw workflow input
         formatted = prompt
-        for k, v in node_input.items():
-            formatted = formatted.replace(f"{{{{ input.{k} }}}}", str(v))
+        replacements = {**ctx.get("input", {}), **node_input}  # node_input overrides raw input
+        for k, v in replacements.items():
+            placeholder = f"{{{{ input.{k} }}}}"
+            if placeholder in formatted:
+                formatted = formatted.replace(placeholder, str(v))
             formatted = formatted.replace(f"{{{{ input.{k} }}}}", str(v))
 
         model_client = model_router.current_client if model_router else None
