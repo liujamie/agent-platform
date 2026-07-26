@@ -380,6 +380,7 @@ function toWorkflowDef() {
         error_strategy: n.error_strategy,
         timeout: n.timeout,
         retry_max: n.error_strategy === 'retry' ? 3 : 1,
+        pos: { x: n.x, y: n.y },
         config: n.type === 'tool' ? {
           tool_name: n.tool_name,
           params: n.tool_params ? (() => { try { return JSON.parse(n.tool_params) } catch { return {} } })() : {},
@@ -415,8 +416,8 @@ function fromWorkflowDef(def) {
       id: n.id,
       type: c.type || n.type,
       name: c.name || n.id,
-      x: c.x || 100 + Math.random() * 200,
-      y: c.y || 100 + Math.random() * 200,
+      x: (c.pos && c.pos.x) || 100 + Math.random() * 200,
+      y: (c.pos && c.pos.y) || 100 + Math.random() * 200,
       tool_name: cc.tool_name || '',
       tool_params: cc.params ? JSON.stringify(cc.params, null, 2) : '',
       agent_id: cc.agent_id || null,
