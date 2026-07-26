@@ -67,14 +67,23 @@ async def build_context(
     4. If no model_client available for summarization → just keep
        the last N messages that fit.
     """
-    if not history:
-        return []
-
-    # ── Level 0: episodic memory injection ──
+    # ── Level 0: episodic memory injection (always retrieve, even without history) ──
     episodes = []
     if agent_id is not None:
         from app.core.memory.episodic import retrieve as retrieve_episodes
         episodes = await retrieve_episodes(agent_id, limit=3)
+
+    # Build episode system message if we have any
+    episode_msg = None
+    if episodes:
+        ep_text = "\n".join(f"- [{e['type']}] {e['content']}" for e in episodes)
+        episode_msg = {
+            "role": "system",
+            "content": f"## 关于用户的历史记忆\n\n{ep_text}",
+        }
+
+    if not history:
+        return [episode_msg] if episode_msg else []
 
     # ── Level 1: message-level truncation ──
     max_msg_tokens = max_tokens // 2
@@ -87,13 +96,9 @@ async def build_context(
         else:
             truncated_history.append(msg)
 
-    # Add episodes as a system message if we have any
-    if episodes:
-        ep_text = "\n".join(f"- [{e['type']}] {e['content']}" for e in episodes)
-        truncated_history.insert(0, {
-            "role": "system",
-            "content": f"## 关于用户的历史记忆\n\n{ep_text}",
-        })
+    # Add episodes if we have any
+    if episode_msg:
+        truncated_history.insert(0, episode_msg)
 
     total = _messages_token_count(truncated_history)
     if total <= max_tokens:

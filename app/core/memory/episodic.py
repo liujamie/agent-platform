@@ -50,7 +50,7 @@ async def retrieve(agent_id: int, limit: int = 5) -> list[dict[str, Any]]:
         from app.infrastructure.models.memory_episode import MemoryEpisode
         result = await db.execute(
             select(MemoryEpisode)
-            .where(MemoryEpisode.agent_id == agent_id, MemoryEpisode.importance >= 2)
+            .where(MemoryEpisode.agent_id == agent_id)
             .order_by(MemoryEpisode.importance.desc(), MemoryEpisode.created_at.desc())
             .limit(limit)
         )
