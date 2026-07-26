@@ -234,6 +234,34 @@ async def get_workflow(wf_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.put("/workflows/{wf_id}")
+async def update_workflow(wf_id: int, req: WorkflowCreateRequest):
+    """Update a workflow definition."""
+    from app.main import get_db_session
+    from sqlalchemy import select
+    session = get_db_session()
+    if session is None:
+        return {"error": "Database not configured"}
+    try:
+        result = await session.execute(
+            select(WorkflowDefinition).where(WorkflowDefinition.id == wf_id)
+        )
+        wf = result.scalar_one_or_none()
+        if wf is None:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        wf.name = req.name
+        wf.description = req.description
+        wf.definition = req.definition
+        wf.updated_at = datetime.now()
+        await session.commit()
+        return _workflow_to_dict(wf)
+    except HTTPException:
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/workflows/{wf_id}")
 async def delete_workflow(wf_id: int):
     """Archive a workflow definition."""

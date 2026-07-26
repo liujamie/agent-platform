@@ -8,6 +8,11 @@
       </div>
     </div>
 
+    <div class="wf-meta" style="display:flex;gap:0.5rem;margin-bottom:0.5rem;align-items:center">
+      <input v-model="wfName" class="form-input" placeholder="Workflow 名称" style="max-width:250px;font-size:0.8rem" />
+      <input v-model="wfDesc" class="form-input" placeholder="描述（可选）" style="max-width:350px;font-size:0.8rem" />
+    </div>
+
     <div class="wf-layout">
       <!-- Left: Node palette -->
       <div class="wf-palette">
@@ -206,6 +211,8 @@ const nodeTypes = [
   { type: 'skill', label: 'Skill', icon: '📘' },
 ]
 
+const wfName = ref('')
+const wfDesc = ref('')
 const nodes = ref([])
 const edges = ref([])
 
@@ -421,8 +428,8 @@ async function saveWorkflow() {
   saving.value = true
   const def = toWorkflowDef()
   const payload = {
-    name: route.query.name || '未命名 Workflow',
-    description: '',
+    name: wfName.value || '未命名 Workflow',
+    description: wfDesc.value || '',
     definition: def,
   }
   try {
@@ -453,6 +460,8 @@ onMounted(async () => {
     try {
       const res = await fetch(`/api/v1/admin/workflows/${route.params.id}`)
       const data = await res.json()
+      wfName.value = data.name || ''
+      wfDesc.value = data.description || ''
       if (data.definition) fromWorkflowDef(data.definition)
     } catch { /* ignore */ }
   }

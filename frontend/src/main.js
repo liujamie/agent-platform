@@ -5,7 +5,7 @@ import Dashboard from './pages/Dashboard.vue'
 import Agents from './pages/Agents.vue'
 import AgentForm from './pages/AgentForm.vue'
 import Workflows from './pages/Workflows.vue'
-import WorkflowForm from './pages/WorkflowForm.vue'
+import WorkflowBuilder from './pages/WorkflowBuilder.vue'
 import WorkflowRun from './pages/WorkflowRun.vue'
 import Logs from './pages/Logs.vue'
 import Models from './pages/Models.vue'
@@ -21,8 +21,8 @@ const routes = [
   { path: '/agents/new', component: AgentForm },
   { path: '/agents/:id/edit', component: AgentForm },
   { path: '/workflows', component: Workflows },
-  { path: '/workflows/new', component: WorkflowForm },
-  { path: '/workflows/:id/edit', component: WorkflowForm },
+  { path: '/workflows/new', component: WorkflowBuilder },
+  { path: '/workflows/:id/edit', component: WorkflowBuilder },
   { path: '/logs', component: Logs },
   { path: '/models', component: Models },
   { path: '/chat', component: Chat },
