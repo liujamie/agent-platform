@@ -266,40 +266,55 @@ class WorkflowExecutor:
         if not expr:
             return True
 
-        # Parse simple expressions: left == 'value' or left > 5 etc.
-        import re
-        match = re.match(r"(\S+)\s*(==|!=|>|<|>=|<=)\s*(.+)", expr)
-        if not match:
-            # Try as plain value lookup
-            val = _resolve_value(ctx, expr)
-            return bool(val) if val is not None else False
-
-        left_path, op, right_raw = match.groups()
-        left_val = _resolve_value(ctx, left_path)
-
-        # Parse right side
-        right_val = right_raw.strip().strip("'\"")
-        # Try number
         try:
-            right_val = int(right_val)
-        except ValueError:
-            try:
-                right_val = float(right_val)
-            except ValueError:
-                pass
+            import re
+            match = re.match(r"(\S+)\s*(==|!=|>|<|>=|<=)\s*(.+)", expr)
+            if not match:
+                val = _resolve_value(ctx, expr)
+                return bool(val) if val is not None else False
 
-        if op == "==":
-            return left_val == right_val
-        elif op == "!=":
-            return left_val != right_val
-        elif op == ">":
-            return float(left_val or 0) > float(right_val)
-        elif op == "<":
-            return float(left_val or 0) < float(right_val)
-        elif op == ">=":
-            return float(left_val or 0) >= float(right_val)
-        elif op == "<=":
-            return float(left_val or 0) <= float(right_val)
+            left_path, op, right_raw = match.groups()
+            left_val = _resolve_value(ctx, left_path)
+
+            # Convert string output to try getting a number
+            if isinstance(left_val, str):
+                try:
+                    left_val = int(left_val)
+                except ValueError:
+                    try:
+                        left_val = float(left_val)
+                    except ValueError:
+                        pass
+
+            # Parse right side
+            right_val = right_raw.strip().strip("'\"")
+            try:
+                right_val = int(right_val)
+            except ValueError:
+                try:
+                    right_val = float(right_val)
+                except ValueError:
+                    pass
+
+            # Both sides: try numeric comparison; fall back to string
+            try:
+                if op == "==":
+                    return left_val == right_val
+                elif op == "!=":
+                    return left_val != right_val
+                elif op == ">":
+                    return float(left_val or 0) > float(right_val)
+                elif op == "<":
+                    return float(left_val or 0) < float(right_val)
+                elif op == ">=":
+                    return float(left_val or 0) >= float(right_val)
+                elif op == "<=":
+                    return float(left_val or 0) <= float(right_val)
+            except (TypeError, ValueError):
+                # Fall back to string comparison
+                return str(left_val) == str(right_val)
+        except Exception as e:
+            raise Exception(f"条件评估失败 [{expr}]: {e}")
         return False
 
     async def _exec_transform(self, config: dict, node_input: dict, ctx: dict) -> Any:

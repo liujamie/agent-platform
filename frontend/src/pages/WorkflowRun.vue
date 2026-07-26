@@ -57,7 +57,10 @@
               </td>
               <td style="font-size:0.8rem">{{ n.duration_ms }}ms</td>
               <td style="font-size:0.8rem">{{ n.retry_count > 0 ? n.retry_count + '次' : '-' }}</td>
-              <td style="font-size:0.75rem;color:#c62828;max-width:200px;overflow:hidden;text-overflow:ellipsis">{{ n.error || '-' }}</td>
+              <td>
+              <span v-if="n.error" style="display:block;padding:0.2rem 0.4rem;background:#fbe9e7;border-radius:3px;color:#c62828;font-size:0.72rem">⚠ {{ n.error }}</span>
+              <span v-else style="color:#999">-</span>
+            </td>
             </tr>
           </tbody>
         </table>
