@@ -60,20 +60,14 @@
                 <span v-for="(step, si) in msg.thinking" :key="si" class="thinking-step">{{ step }}</span>
               </div>
               <div v-if="msg.content" class="chat-content" v-html="renderContent(msg.content)"></div>
+              <div v-if="!msg.content && loading && i === messages.length - 1" class="chat-typing">
+                <span class="typing-dots"><span>.</span><span>.</span><span>.</span></span>
+              </div>
               <div v-if="msg.tool_calls && msg.tool_calls.length" class="chat-tools">
                 <div v-for="tc in msg.tool_calls" :key="tc.id" class="tool-call">🔧 {{ tc.function.name }}({{ tc.function.arguments }})</div>
               </div>
               <div v-if="msg.tool_results && msg.tool_results.length" class="chat-tool-results">
                 <div v-for="(tr, ti) in msg.tool_results" :key="ti" class="tool-result">📦 {{ tr }}</div>
-              </div>
-            </div>
-          </div>
-          <div v-if="loading" class="chat-msg chat-msg-agent">
-            <div class="chat-avatar">🤖</div>
-            <div class="chat-bubble">
-              <div class="chat-typing">
-                <span v-if="streamingText">{{ streamingText }}</span>
-                <span v-else class="typing-dots"><span>.</span><span>.</span><span>.</span></span>
               </div>
             </div>
           </div>

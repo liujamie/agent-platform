@@ -77,8 +77,12 @@ async def save_memory(
     fact_type: str = "fact",
     importance: int = 1,
 ) -> None:
-    """Save a piece of info + its vector embedding to semantic_memories table."""
+    """
+    Save a piece of info + its vector embedding to memory_semantic table.
+    Dedup: if cosine similarity >= 0.85 with existing memory, boost importance instead.
+    """
     from app.main import get_db_session
+    from sqlalchemy import select
 
     db = get_db_session()
     if db is None:
@@ -89,13 +93,34 @@ async def save_memory(
         return
 
     try:
+        importance = min(max(importance, 1), 5)
+
+        # ── Dedup: check existing memories via cosine similarity ──
+        existing = await db.execute(
+            select(SemanticMemoryModel)
+            .where(SemanticMemoryModel.agent_id == agent_id)
+            .order_by(SemanticMemoryModel.created_at.desc())
+            .limit(50)
+        )
+        for mem in existing.scalars().all():
+            if not mem.embedding:
+                continue
+            old_vec = vec_from_bytes(mem.embedding)
+            score = cosine_similarity(vector, old_vec)
+            if score >= 0.85:
+                # Boost importance, skip insert
+                mem.importance = min(mem.importance + 1, 5)
+                await db.commit()
+                return
+
+        # ── No duplicate, insert new ──
         memory = SemanticMemoryModel(
             agent_id=agent_id,
             session_id=session_id,
             content=content,
             embedding=vec_to_bytes(vector),
             type=fact_type,
-            importance=min(max(importance, 1), 5),
+            importance=importance,
         )
         db.add(memory)
         await db.commit()
