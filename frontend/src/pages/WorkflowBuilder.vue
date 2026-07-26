@@ -382,7 +382,7 @@ function toWorkflowDef() {
         retry_max: n.error_strategy === 'retry' ? 3 : 1,
         config: n.type === 'tool' ? {
           tool_name: n.tool_name,
-          params: n.tool_params ? JSON.parse(n.tool_params.replace(/{{/g, '"{{').replace(/}}/g, '}}"')) : {},
+          params: n.tool_params ? (() => { try { return JSON.parse(n.tool_params) } catch { return {} } })() : {},
         } : n.type === 'agent' ? {
           agent_id: n.agent_id ? parseInt(n.agent_id) : null,
           prompt: n.prompt,
@@ -418,7 +418,7 @@ function fromWorkflowDef(def) {
       x: c.x || 100 + Math.random() * 200,
       y: c.y || 100 + Math.random() * 200,
       tool_name: cc.tool_name || '',
-      tool_params: cc.params ? JSON.stringify(cc.params) : '',
+      tool_params: cc.params ? JSON.stringify(cc.params, null, 2) : '',
       agent_id: cc.agent_id || null,
       prompt: cc.prompt || '',
       expression: cc.expression || '',
@@ -460,13 +460,13 @@ function exportJson() {
 
 async function saveWorkflow() {
   saving.value = true
-  const def = toWorkflowDef()
-  const payload = {
-    name: wfName.value || '未命名 Workflow',
-    description: wfDesc.value || '',
-    definition: def,
-  }
   try {
+    const def = toWorkflowDef()
+    const payload = {
+      name: wfName.value || '未命名 Workflow',
+      description: wfDesc.value || '',
+      definition: def,
+    }
     const url = isEdit.value
       ? `/api/v1/admin/workflows/${route.params.id}`
       : '/api/v1/admin/workflows'
