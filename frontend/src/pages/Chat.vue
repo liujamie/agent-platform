@@ -2,6 +2,7 @@
   <div>
     <div class="page-actions">
       <h1 class="page-title" style="margin-bottom: 0">Agent 对话</h1>
+      <button v-if="messages.length" @click="newChat" class="btn btn-outline">新建对话</button>
     </div>
 
     <!-- Agent 选择 + 设置 -->
@@ -120,6 +121,21 @@ async function fetchAgents() {
     agents.value = (agentsRes.agents || []).filter(a => a.status === 'active')
     mcpConnections.value = mcpRes.connections || []
   } catch { agents.value = []; mcpConnections.value = [] }
+}
+
+async function newChat() {
+  if (loading.value) return
+  if (sessionId.value) {
+    try {
+      await fetch('/api/v1/agent/session/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId.value }),
+      })
+    } catch { /* ignore */ }
+  }
+  messages.value = []
+  streamingText.value = ''
 }
 
 function renderContent(text) {

@@ -49,6 +49,10 @@ class AgentRunByIdRequest(BaseModel):
     session_id: str = ""
 
 
+class SessionClearRequest(BaseModel):
+    session_id: str
+
+
 class AgentRunResponse(BaseModel):
     status: str
     output: str = ""
@@ -197,3 +201,14 @@ async def agent_stream_by_id(agent_id: int, req: AgentRunByIdRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/session/clear")
+async def session_clear(req: SessionClearRequest):
+    """Clear a session's history from Redis."""
+    try:
+        from app.infrastructure.redis_client import session_clear as _clear
+        await _clear(req.session_id)
+        return {"message": f"Session '{req.session_id}' cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

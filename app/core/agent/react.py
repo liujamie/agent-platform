@@ -46,6 +46,31 @@ class ReActAgent(BaseAgent):
             },
         })
 
+    async def _load_history(self, session_id: str) -> list[dict]:
+        """Load session history from Redis."""
+        try:
+            from app.infrastructure.redis_client import session_get_messages
+            msgs = await session_get_messages(session_id)
+            return msgs if msgs else []
+        except Exception:
+            return []
+
+    async def _save_to_history(self, session_id: str, user_input: str, llm_output: str) -> None:
+        """Save user message + assistant response to Redis session history."""
+        try:
+            from app.infrastructure.redis_client import session_add_message
+            await session_add_message(session_id, {
+                "role": "user",
+                "content": user_input,
+            })
+            if llm_output:
+                await session_add_message(session_id, {
+                    "role": "assistant",
+                    "content": llm_output,
+                })
+        except Exception:
+            pass
+
     async def _fetch_skill_content(self, name: str) -> str | None:
         """Load a skill's content from the filesystem (skills/{name}/)."""
         from app.core.skill.loader import load_skill_content
